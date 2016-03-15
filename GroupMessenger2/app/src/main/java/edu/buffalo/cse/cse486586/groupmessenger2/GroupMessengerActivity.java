@@ -19,13 +19,13 @@ import android.widget.TextView;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.concurrent.PriorityBlockingQueue;
 
 /**
  * GroupMessengerActivity is the main Activity for the assignment.
@@ -43,7 +43,9 @@ public class GroupMessengerActivity extends Activity {
     static final int SERVER_PORT = 10000;
     private ContentResolver mContentResolver;
 
-    long key = 0;
+    long sequence = 0;
+
+    private PriorityBlockingQueue<MessageWrapper> queue = new PriorityBlockingQueue<MessageWrapper>(5, MessageWrapper.messageWrapperComparator);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -135,7 +137,7 @@ public class GroupMessengerActivity extends Activity {
 
         /*
          * Register an OnKeyListener for the input box. OnKeyListener is an event handler that
-         * processes each key event. The purpose of the following code is to detect an enter key
+         * processes each sequence event. The purpose of the following code is to detect an enter sequence
          * press event, and create a client thread so that the client thread can send the string
          * in the input box over the network.
          */
@@ -145,7 +147,7 @@ public class GroupMessengerActivity extends Activity {
                 if ((event.getAction() == KeyEvent.ACTION_DOWN) &&
                         (keyCode == KeyEvent.KEYCODE_ENTER)) {
                     /*
-                     * If the key is pressed (i.e., KeyEvent.ACTION_DOWN) and it is an enter key
+                     * If the sequence is pressed (i.e., KeyEvent.ACTION_DOWN) and it is an enter sequence
                      * (i.e., KeyEvent.KEYCODE_ENTER), then we display the string. Then we create
                      * an AsyncTask that sends the string to the remote AVD.
                      */
@@ -231,13 +233,10 @@ public class GroupMessengerActivity extends Activity {
             TextView localTextView = (TextView) findViewById(R.id.textView1);
             localTextView.append("\n");
 
-            mContentValues.put("key", new StringBuffer().append(key).toString());
-            key++;
-            mContentValues.put("value",  strings[0]);
+            mContentValues.put(Constants.KEY, new StringBuffer().append(sequence++).toString());
+            mContentValues.put(Constants.VALUE, strings[0]);
 
-            mContentResolver.insert(mUri,mContentValues);
-
-
+            mContentResolver.insert(mUri, mContentValues);
 
             /*
              * The following code creates a file in the AVD's internal storage and stores a file.
@@ -260,7 +259,7 @@ public class GroupMessengerActivity extends Activity {
     /***
      * ClientTask is an AsyncTask that should send a string over the network.
      * It is created by ClientTask.executeOnExecutor() call whenever OnKeyListener.onKey() detects
-     * an enter key press event.
+     * an enter sequence press event.
      *
      * @author stevko
      */
@@ -287,6 +286,7 @@ public class GroupMessengerActivity extends Activity {
                     Log.e(TAG, "ClientTask UnknownHostException");
                 }catch(IOException e){
                     Log.e(TAG, "ClientTask socket IOException");
+                    Log.e(TAG, Log.getStackTraceString(e));
                 }
             }
             return null;

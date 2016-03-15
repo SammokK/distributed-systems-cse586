@@ -280,6 +280,8 @@ public class GroupMessengerActivity extends Activity {
                     String msgToSend = msgs[0];
                     OutputStream outputStream = socket.getOutputStream();
                     DataOutputStream dataOutputStream = new DataOutputStream(outputStream);
+
+                    //send data through the socket
                     dataOutputStream.writeUTF(msgToSend);
 
                     socket.close();

@@ -8,9 +8,9 @@ import android.net.Uri;
 import android.util.Log;
 
 /**
- * GroupMessengerProvider is a key-value table. Once again, please note that we do not implement
+ * GroupMessengerProvider is a sequence-value table. Once again, please note that we do not implement
  * full support for SQL as a usual ContentProvider does. We re-purpose ContentProvider's interface
- * to use it as a key-value table.
+ * to use it as a sequence-value table.
  * <p/>
  * Please read:
  * <p/>
@@ -41,8 +41,8 @@ public class GroupMessengerProvider extends ContentProvider {
     @Override
     public Uri insert(Uri uri, ContentValues values) {
         /*
-         * TODO: You need to implement this method. Note that values will have two columns (a key
-         * column and a value column) and one row that contains the actual (key, value) pair to be
+         * TODO: You need to implement this method. Note that values will have two columns (a sequence
+         * column and a value column) and one row that contains the actual (sequence, value) pair to be
          * inserted.
          * 
          * For actual storage, you can use any option. If you know how to use SQL, then you can use
@@ -50,24 +50,21 @@ public class GroupMessengerProvider extends ContentProvider {
          * internal storage option that we used in PA1. If you want to use that option, please
          * take a look at the code for PA1.
          */
-        long returner = myDatabase.insertWithOnConflict(GROUP_MESSENGER, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        long returner = myDatabase.insertWithOnConflict(Constants.GROUP_MESSENGER, null, values, SQLiteDatabase.CONFLICT_REPLACE);
 
         Log.v("insert", values.toString()+","+"return value->" + returner);
         return uri;
     }
 
     SQLiteDatabase myDatabase = null;
-    String KEY = "key";
-    String VALUE = "value";
-    String GROUP_MESSENGER = "GROUP_MESSENGER";
 
     @Override
     public boolean onCreate() {
         // If you need to perform any one-time initialization task, please do it here.
         DbHelper dbHelper = new DbHelper(getContext(), "group-messenger1.db", null, 1);
         myDatabase = dbHelper.getWritableDatabase();
-        myDatabase.execSQL("DROP TABLE IF EXISTS " + GROUP_MESSENGER);
-        myDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + GROUP_MESSENGER + " (" + KEY + " VARCHAR PRIMARY KEY NOT NULL, "+VALUE+" VARCHAR);");
+        myDatabase.execSQL("DROP TABLE IF EXISTS " + Constants.GROUP_MESSENGER);
+        myDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + Constants.GROUP_MESSENGER + " (" + Constants.KEY + " VARCHAR PRIMARY KEY NOT NULL, " + Constants.VALUE + " VARCHAR);");
         return false;
     }
 
@@ -76,7 +73,7 @@ public class GroupMessengerProvider extends ContentProvider {
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         // You do not need to implement this.
 
-//        long group_messenger = myDatabase.insertWithOnConflict(GROUP_MESSENGER, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+//        long Constants.GROUP_MESSENGER = myDatabase.insertWithOnConflict(Constants.GROUP_MESSENGER, null, values, SQLiteDatabase.CONFLICT_REPLACE);
 
         return 0;
     }
@@ -99,7 +96,7 @@ public class GroupMessengerProvider extends ContentProvider {
 
         //SAMMOK adding code here
 
-        Cursor cursor = myDatabase.query(true, GROUP_MESSENGER, new String[] {KEY, VALUE}, KEY + " = ?", new String[]{selection}, null, null, null, null);
+        Cursor cursor = myDatabase.query(true, Constants.GROUP_MESSENGER, new String[] {Constants.KEY, Constants.VALUE}, Constants.KEY + " = ?", new String[]{selection}, null, null, null, null);
 
 
 //        if (cursor != null && !cursor.isClosed()) {

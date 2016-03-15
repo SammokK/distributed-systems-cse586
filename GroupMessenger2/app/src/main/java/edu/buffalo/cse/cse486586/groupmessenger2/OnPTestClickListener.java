@@ -17,8 +17,8 @@ import android.widget.TextView;
  * 
  * before you start. Please note that our use of a ContentProvider is a bit different from the
  * standard way of using it as described in the PA2 spec. The bottom line is that our
- * ContentProvider does not have full support for SQL. It is just a key-value table, like a hash
- * table. It just needs to be able to insert (key, value) pairs, store them, and return them when
+ * ContentProvider does not have full support for SQL. It is just a sequence-value table, like a hash
+ * table. It just needs to be able to insert (sequence, value) pairs, store them, and return them when
  * queried.
  * 
  * A ContentProvider has a unique URI that other apps use to access it. ContentResolver is
@@ -107,13 +107,13 @@ public class OnPTestClickListener implements OnClickListener {
 
     /**
      * testQuery() uses ContentResolver.query() to retrieves values from your ContentProvider.
-     * It simply queries one key at a time and verifies whether it matches any (key, value) pair
+     * It simply queries one sequence at a time and verifies whether it matches any (sequence, value) pair
      * previously inserted by testInsert().
      * 
      * Please pay extra attention to the Cursor object you return from your ContentProvider.
      * It should have two columns; the first column (KEY_FIELD) is for keys 
      * and the second column (VALUE_FIELD) is values. In addition, it should include exactly
-     * one row that contains a key and a value.
+     * one row that contains a sequence and a value.
      * 
      * @return
      */
