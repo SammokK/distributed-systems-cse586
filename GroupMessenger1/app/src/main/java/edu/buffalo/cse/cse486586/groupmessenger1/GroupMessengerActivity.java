@@ -36,8 +36,6 @@ import java.net.UnknownHostException;
 public class GroupMessengerActivity extends Activity {
     static final String TAG = GroupMessengerActivity.class.getSimpleName();
     private final ContentValues mContentValues =  new ContentValues();
-    ;
-
 
     static final String REMOTE_PORTS[] = {"11108", "11112", "11116" , "11120" , "11124"};
     private final Uri mUri = buildUri("content", "edu.buffalo.cse.cse486586.groupmessenger1.provider");
