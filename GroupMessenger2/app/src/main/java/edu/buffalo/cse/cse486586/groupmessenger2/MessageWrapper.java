@@ -16,9 +16,13 @@ class MessageWrapper implements Serializable {
      * if type == MessageWrapper.ACK_TYPE, reply type holds the final sequence number
      */
     private String data;
-    private Double priority;
+    private Double newPriority;
     private int type;
     private boolean isReady;
+    private Double originalPriority;
+    private String port;
+
+
 
     public static final int TYPE_MESSAGE = 1;
     public static final int TYPE_REPLY =  2;
@@ -28,9 +32,9 @@ class MessageWrapper implements Serializable {
 
         @Override
         public int compare(MessageWrapper o1, MessageWrapper o2) {
-            if (o1.getPriority() > o2.getPriority()) {
+            if (o1.getNewPriority() > o2.getNewPriority()) {
                 return 1;
-            } else if (o1.getPriority() < o2.getPriority()) {
+            } else if (o1.getNewPriority() < o2.getNewPriority()) {
                 return -1;
             } else {
                 return 0;
@@ -38,15 +42,6 @@ class MessageWrapper implements Serializable {
         }
     };
 
-    public void setPriority(Double priority) {
-        this.priority = priority;
-    }
-
-    public MessageWrapper(String data, Double priority, int type) {
-        this.data = data;
-        this.priority = priority;
-        this.type = type;
-    }
 
     public String getData() {
         return data;
@@ -54,10 +49,6 @@ class MessageWrapper implements Serializable {
 
     public void setData(String data) {
         this.data = data;
-    }
-
-    public Double getPriority() {
-        return priority;
     }
 
     public int getType() {
@@ -76,13 +67,39 @@ class MessageWrapper implements Serializable {
         this.isReady = isReady;
     }
 
+    public Double getNewPriority() {
+        return newPriority;
+    }
+
+    public void setNewPriority(Double newPriority) {
+        this.newPriority = newPriority;
+    }
+
+    public Double getOriginalPriority() {
+        return originalPriority;
+    }
+
+    public void setOriginalPriority(Double originalPriority) {
+        this.originalPriority = originalPriority;
+    }
+
+    public String getPort() {
+        return port;
+    }
+
+    public void setPort(String port) {
+        this.port = port;
+    }
+
     @Override
     public String toString() {
         return "MessageWrapper{" +
-                "type=" + type +
-                ", priority=" + priority +
-                ", data='" + data + '\'' +
+                "data='" + data + '\'' +
+                ", newPriority=" + newPriority +
+                ", type=" + type +
                 ", isReady=" + isReady +
+                ", originalPriority=" + originalPriority +
+                ", port='" + port + '\'' +
                 '}';
     }
 }
