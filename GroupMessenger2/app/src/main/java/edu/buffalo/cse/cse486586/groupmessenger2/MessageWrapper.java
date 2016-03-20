@@ -21,6 +21,8 @@ class MessageWrapper implements Serializable {
     private boolean isReady;
     private Double originalPriority;
     private String port;
+    private int noOfReplies;
+    private long finalPriority;
 
 
 

@@ -29,7 +29,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.PriorityBlockingQueue;
 
 /**
@@ -53,7 +52,7 @@ public class GroupMessengerActivity extends Activity {
 
     Double sequence = new Double(0);
 
-    private PriorityBlockingQueue<MessageWrapper> queue = new PriorityBlockingQueue<MessageWrapper>(5, MessageWrapper.messageWrapperComparator);
+    private PriorityBlockingQueue<MessageWrapper> queue = new PriorityBlockingQueue<MessageWrapper>(200, MessageWrapper.messageWrapperComparator);
     /**
      * ATTENTION: This was auto-generated to implement the App Indexing API.
      * See https://g.co/AppIndexing/AndroidStudio for more information.
@@ -198,13 +197,13 @@ public class GroupMessengerActivity extends Activity {
         // See https://g.co/AppIndexing/AndroidStudio for more information.
         client.connect();
         Action viewAction = Action.newAction(
-                Action.TYPE_VIEW, // TODO: choose an action type.
-                "GroupMessenger Page", // TODO: Define a title for the content shown.
-                // TODO: If you have web page content that matches this app activity's content,
+                Action.TYPE_VIEW, // done: choose an action type.
+                "GroupMessenger Page", // done: Define a title for the content shown.
+                // done: If you have web page content that matches this app activity's content,
                 // make sure this auto-generated web page URL is correct.
                 // Otherwise, set the URL to null.
                 Uri.parse("http://host/path"),
-                // TODO: Make sure this auto-generated app deep link URI is correct.
+                // done: Make sure this auto-generated app deep link URI is correct.
                 Uri.parse("android-app://edu.buffalo.cse.cse486586.groupmessenger2/http/host/path")
         );
         AppIndex.AppIndexApi.start(client, viewAction);
@@ -217,13 +216,13 @@ public class GroupMessengerActivity extends Activity {
         // ATTENTION: This was auto-generated to implement the App Indexing API.
         // See https://g.co/AppIndexing/AndroidStudio for more information.
         Action viewAction = Action.newAction(
-                Action.TYPE_VIEW, // TODO: choose an action type.
-                "GroupMessenger Page", // TODO: Define a title for the content shown.
-                // TODO: If you have web page content that matches this app activity's content,
+                Action.TYPE_VIEW, // done: choose an action type.
+                "GroupMessenger Page", // done: Define a title for the content shown.
+                // done: If you have web page content that matches this app activity's content,
                 // make sure this auto-generated web page URL is correct.
                 // Otherwise, set the URL to null.
                 Uri.parse("http://host/path"),
-                // TODO: Make sure this auto-generated app deep link URI is correct.
+                // done: Make sure this auto-generated app deep link URI is correct.
                 Uri.parse("android-app://edu.buffalo.cse.cse486586.groupmessenger2/http/host/path")
         );
         AppIndex.AppIndexApi.end(client, viewAction);
@@ -253,11 +252,12 @@ public class GroupMessengerActivity extends Activity {
             final ServerSocket serverSocket = sockets[0];
 
             /*
-             * TODO: Fill in your server code that receives messages and passes them
+             * done: Fill in your server code that receives messages and passes them
              * to onProgressUpdate().
              */
             try {
                 while (true) {
+                    Log.v(TAG, "server:start");
                     Log.v(TAG, "Waiting for next socket connection...");
                     final Socket socket = serverSocket.accept();
                     Log.v(TAG, "Accepted socket" +
@@ -271,16 +271,30 @@ public class GroupMessengerActivity extends Activity {
                         publishProgress(wrapper.toString());
 
 
-
                         if (wrapper.getType() == MessageWrapper.TYPE_ACK) {
                             //check if message is ready to be inserted to database, if it is - insert to database
-                            Log.v(TAG, "TYPE_ACK message received from socket " + socket + " Readying for insertion into database.");
+//                            Log.v(TAG, "db: TYPE_ACK message " + wrapper + " received from socket " + socket + " Readying for insertion into database.");
                             mContentValues.put(Constants.KEY, new StringBuffer().append(dbCounter++).toString());
                             mContentValues.put(Constants.VALUE, wrapper.getData());
                             mContentResolver.insert(mUri, mContentValues);
+                            Log.v(TAG, "db: inserted key=" + dbCounter + ", value=" + wrapper.getData());
+
                             sequence = wrapper.getNewPriority() + 1;
 
-                            //remove the entry from the priority queue todo
+                            //remove the replies from the priority queue todo
+                            ArrayList<MessageWrapper> pqToList = new ArrayList<MessageWrapper>(queue);
+                            int removeCount= 0;
+                            for (MessageWrapper queueMessage : pqToList) {
+                                if (queueMessage.getPort().equalsIgnoreCase(wrapper.getPort()) && (queueMessage.getOriginalPriority().equals(wrapper.getOriginalPriority()))) {
+//                                    Log.v(TAG, "Found queue message. Attempting to remove from queue.");
+                                    if (queue.remove(queueMessage)) {
+//                                        Log.v(TAG, "removed " + queueMessage + "from the queue.");
+                                        removeCount++;
+                                    }
+                                }
+                            }
+                            Log.v(TAG, "db: removed " + removeCount + " entries from pq");
+
 
                         } else if (wrapper.getType() == MessageWrapper.TYPE_MESSAGE) {
 
@@ -307,35 +321,36 @@ public class GroupMessengerActivity extends Activity {
                             sequence++;
                             Log.v(TAG, "Sent a reply with  " + wrapper);
                         } else if (wrapper.getType() == MessageWrapper.TYPE_REPLY) {
-                            Log.v(TAG, "state of pq before adding " + wrapper + "->" + queue);
+//                            Log.v(TAG, "state of pq before adding " + wrapper + "->" + queue);
+
                             queue.add(wrapper);
-                            Log.v(TAG, "state of pq after adding " + wrapper + "->" + queue);
+//                            Log.v(TAG, "state of pq after adding " + wrapper + "->" + queue);
 
                             Log.v(TAG, "TYPE_REPLY wrapper received -> " + wrapper + " ... Should check if all replies have come in");
 
                             //This is a reply. Send an ACK message with the highest priority
                             //go through the priority queue searching for this message with this port number and original sequence number
 
-                            List<MessageWrapper> queueMessages = new ArrayList<MessageWrapper>();
                             double maxPriority = 0;
+                            int count= 0;
                             //check if all responses are collected
-                            for (MessageWrapper queueMessage : queue) {
-                                Log.v(TAG, "Iterator inside pq " +queueMessage );
-                                Log.v(TAG, "condition " +queueMessage );
 
-                                if (queueMessage.getPort().equalsIgnoreCase(wrapper.getPort()) && (queueMessage.getOriginalPriority() == wrapper.getOriginalPriority()) && (queueMessage.getType()==MessageWrapper.TYPE_REPLY)) {
-                                    queueMessages.add(queueMessage);
-                                    Log.v(TAG, "state of temp queue messages " + queueMessages);
+                            ArrayList<MessageWrapper> pqToList  = new ArrayList<MessageWrapper>(queue);
+
+                            for (MessageWrapper queueMessage: pqToList) {
+                                if (queueMessage.getPort().equalsIgnoreCase(wrapper.getPort()) && (queueMessage.getOriginalPriority().equals(wrapper.getOriginalPriority())) && (queueMessage.getType()==MessageWrapper.TYPE_REPLY)) {
                                     //calculating max priority
                                     if (maxPriority < queueMessage.getNewPriority()) {
                                         maxPriority = queueMessage.getNewPriority();
+                                        Log.v(TAG, "The count at this point is " + count);
                                     }
+                                    count++;
                                 }
                             }
-                            if (queueMessages.size() == REMOTE_PORTS.length) {
+                            if (count == REMOTE_PORTS.length) {
                                 Log.v(TAG, "All replies have come in. Max priority is " + maxPriority);
                                 //now set new priority, send final ack message to all nodes
-                                wrapper.setNewPriority(maxPriority);
+//                                wrapper.setNewPriority(maxPriority);
                                 Socket[] serverSockets = initializeSockets();
 
                                 for (int i = 0; i < REMOTE_PORTS.length; i++) {
@@ -345,6 +360,9 @@ public class GroupMessengerActivity extends Activity {
                                     messageWrapper.setIsReady(true);
                                     messageWrapper.setNewPriority(maxPriority);
                                     messageWrapper.setType(MessageWrapper.TYPE_ACK);
+                                    messageWrapper.setOriginalPriority(wrapper.getOriginalPriority());
+                                    messageWrapper.setPort(wrapper.getPort());
+                                    messageWrapper.setIsReady(true);
 
                                     ObjectOutputStream objectOutputStream = new ObjectOutputStream(serverSockets[i].getOutputStream());
                                     objectOutputStream.writeObject(messageWrapper);
@@ -356,7 +374,8 @@ public class GroupMessengerActivity extends Activity {
                                     }
                                 }
                             } else {
-                                Log.v(TAG, "Only " + queueMessages.size() + " replies have come in. Will process when all " + REMOTE_PORTS.length + " come in.");
+
+                                Log.v(TAG, "Only " + count + " replies have come in. Will process when all " + REMOTE_PORTS.length + " come in.");
                             }
                         }
                     } catch (IOException e) {
@@ -367,12 +386,13 @@ public class GroupMessengerActivity extends Activity {
                     if(!serverSocket.isClosed()) {
                         socket.close();
                     }
+                    Log.v(TAG, "server:end");
+
                 }
 
             } catch (Exception e) {
                 Log.e(TAG, Log.getStackTraceString(e));
             }
-
             return null;
         }
 
@@ -414,12 +434,21 @@ public class GroupMessengerActivity extends Activity {
      *
      * @author stevko
      */
+
+    private Object lock1 = new Object();
+
+    private Double sendSequence = new Double(0);
+
     private class ClientTask extends AsyncTask<String, Void, Void> {
 
         @Override
         protected Void doInBackground(String... msgs) {
-            double tempSequence = sequence;
-            synchronized (sequence) {
+
+            Log.v(TAG, "client:start");
+
+            synchronized (lock1) {
+
+
                 //initializing each socket only once
                 Socket[] serverSockets = initializeSockets();
                 MessageWrapper[] replies = new MessageWrapper[5];
@@ -431,7 +460,7 @@ public class GroupMessengerActivity extends Activity {
                         MessageWrapper messageWrapper = new MessageWrapper();
                         messageWrapper.setData(msgToSend);
                         messageWrapper.setIsReady(false);
-                        messageWrapper.setOriginalPriority(tempSequence);
+                        messageWrapper.setOriginalPriority(sendSequence + Double.parseDouble(myPort));
                         messageWrapper.setNewPriority(0d);
                         messageWrapper.setType(MessageWrapper.TYPE_MESSAGE);
                         messageWrapper.setPort(myPort);
@@ -439,7 +468,7 @@ public class GroupMessengerActivity extends Activity {
                         ObjectOutputStream objectOutputStream = new ObjectOutputStream(serverSockets[j].getOutputStream());
                         objectOutputStream.writeObject(messageWrapper);
                         objectOutputStream.flush();
-                        if(!serverSockets[j].isClosed()) {
+                        if (!serverSockets[j].isClosed()) {
                             serverSockets[j].close();
                         }
                         Log.v(TAG, "Sending wrapper TYPE_MESSAGE " + messageWrapper + " to socket " + serverSockets[j]);
@@ -450,9 +479,9 @@ public class GroupMessengerActivity extends Activity {
                         Log.e(TAG, Log.getStackTraceString(e));
                     }
                 }
-
-
+                sendSequence++;
             }
+            Log.v(TAG, "client:end");
             return null;
         }
     }
