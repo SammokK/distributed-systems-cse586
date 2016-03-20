@@ -43,8 +43,6 @@ public class GroupMessengerActivity extends Activity {
 
     static final String REMOTE_PORTS[] = {"11108", "11112", "11116", "11120", "11124"};
 
-    Socket serverSockets[] = new Socket[5];
-
     String myPort = null;
     private static Integer dbCounter = 0;
 
@@ -85,7 +83,7 @@ public class GroupMessengerActivity extends Activity {
                 new OnPTestClickListener(tv, getContentResolver()));
 
         /*
-         * TODO: You need to register and implement an OnClickListener for the "Send" button.
+         * done: You need to register and implement an OnClickListener for the "Send" button.
          * In your implementation you need to get the message from the input box (EditText)
          * and send it to other AVDs.
          */
@@ -252,7 +250,7 @@ public class GroupMessengerActivity extends Activity {
 
         @Override
         protected Void doInBackground(ServerSocket... sockets) {
-            ServerSocket serverSocket = sockets[0];
+            final ServerSocket serverSocket = sockets[0];
 
             /*
              * TODO: Fill in your server code that receives messages and passes them
@@ -261,102 +259,116 @@ public class GroupMessengerActivity extends Activity {
             try {
                 while (true) {
                     Log.v(TAG, "Waiting for next socket connection...");
-                    final Socket socket;
-                    socket = serverSocket.accept();
+                    final Socket socket = serverSocket.accept();
                     Log.v(TAG, "Accepted socket" +
                             socket);
-                    //create a new thread that keeps listening on loop
+                    try {
+                        ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream());
 
-                    Thread thread = new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            while (true) {
-                                try {
-                                    ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream());
+                        Log.v(TAG, "Waiting for a message on this socket " + socket);
+                        MessageWrapper wrapper = (MessageWrapper) objectInputStream.readObject();
 
-                                    Log.v(TAG, "Waiting for a message on this socket " + socket);
-                                    MessageWrapper wrapper = (MessageWrapper) objectInputStream.readObject();
+                        publishProgress(wrapper.toString());
 
-                                    ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
 
-                                    if (wrapper.getType() == MessageWrapper.TYPE_ACK) {
-                                        //check if message is ready to be inserted to database, if it is - insert to database
-                                        Log.v(TAG, "TYPE_ACK message received from socket " +socket + " Readying for insertion into database.");
-                                        mContentValues.put(Constants.KEY, new StringBuffer().append(dbCounter++).toString());
-                                        mContentValues.put(Constants.VALUE, wrapper.getData());
-                                        mContentResolver.insert(mUri, mContentValues);
-                                        sequence = wrapper.getNewPriority()+1;
 
-                                        //remove the entry from the priority queue todo
+                        if (wrapper.getType() == MessageWrapper.TYPE_ACK) {
+                            //check if message is ready to be inserted to database, if it is - insert to database
+                            Log.v(TAG, "TYPE_ACK message received from socket " + socket + " Readying for insertion into database.");
+                            mContentValues.put(Constants.KEY, new StringBuffer().append(dbCounter++).toString());
+                            mContentValues.put(Constants.VALUE, wrapper.getData());
+                            mContentResolver.insert(mUri, mContentValues);
+                            sequence = wrapper.getNewPriority() + 1;
 
-                                    } else if (wrapper.getType() == MessageWrapper.TYPE_MESSAGE) {
+                            //remove the entry from the priority queue todo
 
-                                        Log.v(TAG, "TYPE_MESSAGE wrapper received -> " + wrapper + " ... Should send a REPLY");
+                        } else if (wrapper.getType() == MessageWrapper.TYPE_MESSAGE) {
 
-                                        //add this entry to priority queue
-                                        queue.add(wrapper);
-                                        //Send a reply proposing a sequence number
-                                        double priority = sequence + Double.parseDouble(myPort) / 100000;
-                                        wrapper.setNewPriority(priority);
-                                        wrapper.setType(MessageWrapper.TYPE_REPLY);
-                                        sequence++;
-                                        objectOutputStream.writeObject(wrapper);
-                                        objectOutputStream.flush();
-                                        Log.v(TAG, "Sent a reply with  " + wrapper);
-                                    } else if(wrapper.getType() == MessageWrapper.TYPE_REPLY) {
+                            Log.v(TAG, "TYPE_MESSAGE wrapper received -> " + wrapper + " ... Should send a REPLY");
 
-                                        Log.v(TAG, "TYPE_REPLY wrapper received -> " + wrapper + " ... Should send an ACK");
+                            //add this entry to priority queue
+                            Log.v(TAG, "Added to pq. The current state of pq is  " + queue);
 
-                                        //This is a reply. Send an ACK message with the highest priority
-                                        //go through the priority queue searching for this message with this port number and original sequence number
+                            //Send a reply proposing a sequence number
+                            double priority = sequence + Double.parseDouble(myPort) / 100000;
+                            wrapper.setNewPriority(priority);
+                            wrapper.setType(MessageWrapper.TYPE_REPLY);
 
-                                        List<MessageWrapper> queueMessages = new ArrayList<MessageWrapper>();
-                                        double maxPriority = 0;
-                                        //check if all responses are collected
-                                        for (MessageWrapper queueMessage : queue) {
+                            Socket replySocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                                    Integer.parseInt(wrapper.getPort()));
 
-                                            if (queueMessage.getPort() == wrapper.getPort() && queueMessage.getOriginalPriority() == wrapper.getOriginalPriority()) {
-                                                queueMessages.add(queueMessage);
-                                                //calculating max priority
-                                                if(maxPriority<queueMessage.getNewPriority()) {
-                                                    maxPriority=queueMessage.getNewPriority();
-                                                }
-                                            }
-                                        }
-                                        if (queueMessages.size() == REMOTE_PORTS.length) {
-                                            Log.v(TAG, "All replies have come in. Max priority is " + maxPriority);
-                                            //now set new priority, send final ack message to all nodes
-                                            wrapper.setNewPriority(maxPriority);
-                                            initializeSockets();
 
-                                            for(int i = 0; i<serverSockets.length; i++) {
+                            ObjectOutputStream objectOutputStream = new ObjectOutputStream(replySocket.getOutputStream());
+                            objectOutputStream.writeObject(wrapper);
+                            objectOutputStream.flush();
+                            if (!replySocket.isClosed()) {
+                                replySocket.close();
+                            }
+                            sequence++;
+                            Log.v(TAG, "Sent a reply with  " + wrapper);
+                        } else if (wrapper.getType() == MessageWrapper.TYPE_REPLY) {
+                            Log.v(TAG, "state of pq before adding " + wrapper + "->" + queue);
+                            queue.add(wrapper);
+                            Log.v(TAG, "state of pq after adding " + wrapper + "->" + queue);
 
-                                                MessageWrapper messageWrapper = new MessageWrapper();
-                                                messageWrapper.setData(wrapper.getData());
-                                                messageWrapper.setIsReady(true);
-                                                messageWrapper.setNewPriority(maxPriority);
-                                                messageWrapper.setType(MessageWrapper.TYPE_ACK);
+                            Log.v(TAG, "TYPE_REPLY wrapper received -> " + wrapper + " ... Should check if all replies have come in");
 
-                                                ObjectOutputStream objectOutputStream1 = new ObjectOutputStream(serverSockets[i].getOutputStream());
-                                                objectOutputStream1.writeObject(messageWrapper);
-                                                objectOutputStream1.flush();
-                                                Log.v(TAG, "Sent ACK " + wrapper + " socket " + socket);
-                                            }
-                                        } else {
-                                            Log.v(TAG, "Only " + queueMessages.size() + " replies have come in. Will process when all " + REMOTE_PORTS.length + " come in.");
-                                        }
+                            //This is a reply. Send an ACK message with the highest priority
+                            //go through the priority queue searching for this message with this port number and original sequence number
+
+                            List<MessageWrapper> queueMessages = new ArrayList<MessageWrapper>();
+                            double maxPriority = 0;
+                            //check if all responses are collected
+                            for (MessageWrapper queueMessage : queue) {
+                                Log.v(TAG, "Iterator inside pq " +queueMessage );
+                                Log.v(TAG, "condition " +queueMessage );
+
+                                if (queueMessage.getPort().equalsIgnoreCase(wrapper.getPort()) && (queueMessage.getOriginalPriority() == wrapper.getOriginalPriority()) && (queueMessage.getType()==MessageWrapper.TYPE_REPLY)) {
+                                    queueMessages.add(queueMessage);
+                                    Log.v(TAG, "state of temp queue messages " + queueMessages);
+                                    //calculating max priority
+                                    if (maxPriority < queueMessage.getNewPriority()) {
+                                        maxPriority = queueMessage.getNewPriority();
                                     }
-                                    publishProgress(wrapper.toString());
-                                } catch (IOException e) {
-                                    Log.e(TAG, Log.getStackTraceString(e));
-                                } catch (ClassNotFoundException e) {
-                                    Log.e(TAG, Log.getStackTraceString(e));
                                 }
                             }
+                            if (queueMessages.size() == REMOTE_PORTS.length) {
+                                Log.v(TAG, "All replies have come in. Max priority is " + maxPriority);
+                                //now set new priority, send final ack message to all nodes
+                                wrapper.setNewPriority(maxPriority);
+                                Socket[] serverSockets = initializeSockets();
+
+                                for (int i = 0; i < REMOTE_PORTS.length; i++) {
+
+                                    MessageWrapper messageWrapper = new MessageWrapper();
+                                    messageWrapper.setData(wrapper.getData());
+                                    messageWrapper.setIsReady(true);
+                                    messageWrapper.setNewPriority(maxPriority);
+                                    messageWrapper.setType(MessageWrapper.TYPE_ACK);
+
+                                    ObjectOutputStream objectOutputStream = new ObjectOutputStream(serverSockets[i].getOutputStream());
+                                    objectOutputStream.writeObject(messageWrapper);
+                                    objectOutputStream.flush();
+                                    Log.v(TAG, "Sent ACK " + wrapper + " socket " + socket);
+
+                                    if (!serverSockets[i].isClosed()) {
+                                        serverSockets[i].close();
+                                    }
+                                }
+                            } else {
+                                Log.v(TAG, "Only " + queueMessages.size() + " replies have come in. Will process when all " + REMOTE_PORTS.length + " come in.");
+                            }
                         }
-                    });
-                    thread.start();
+                    } catch (IOException e) {
+                        Log.e(TAG, Log.getStackTraceString(e));
+                    } catch (ClassNotFoundException e) {
+                        Log.e(TAG, Log.getStackTraceString(e));
+                    }
+                    if(!serverSocket.isClosed()) {
+                        socket.close();
+                    }
                 }
+
             } catch (Exception e) {
                 Log.e(TAG, Log.getStackTraceString(e));
             }
@@ -406,11 +418,10 @@ public class GroupMessengerActivity extends Activity {
 
         @Override
         protected Void doInBackground(String... msgs) {
-
+            double tempSequence = sequence;
             synchronized (sequence) {
-                sequence++;
                 //initializing each socket only once
-                initializeSockets();
+                Socket[] serverSockets = initializeSockets();
                 MessageWrapper[] replies = new MessageWrapper[5];
                 for (int j = 0; j < serverSockets.length; j++) {
                     try {
@@ -420,7 +431,7 @@ public class GroupMessengerActivity extends Activity {
                         MessageWrapper messageWrapper = new MessageWrapper();
                         messageWrapper.setData(msgToSend);
                         messageWrapper.setIsReady(false);
-                        messageWrapper.setOriginalPriority(sequence);
+                        messageWrapper.setOriginalPriority(tempSequence);
                         messageWrapper.setNewPriority(0d);
                         messageWrapper.setType(MessageWrapper.TYPE_MESSAGE);
                         messageWrapper.setPort(myPort);
@@ -428,6 +439,9 @@ public class GroupMessengerActivity extends Activity {
                         ObjectOutputStream objectOutputStream = new ObjectOutputStream(serverSockets[j].getOutputStream());
                         objectOutputStream.writeObject(messageWrapper);
                         objectOutputStream.flush();
+                        if(!serverSockets[j].isClosed()) {
+                            serverSockets[j].close();
+                        }
                         Log.v(TAG, "Sending wrapper TYPE_MESSAGE " + messageWrapper + " to socket " + serverSockets[j]);
                     } catch (UnknownHostException e) {
                         Log.e(TAG, "ClientTask UnknownHostException");
@@ -443,7 +457,8 @@ public class GroupMessengerActivity extends Activity {
         }
     }
 
-    private void initializeSockets() {
+    private Socket[] initializeSockets() {
+        Socket[] serverSockets = new Socket[REMOTE_PORTS.length];
         try {
             for (int i = 0; i < REMOTE_PORTS.length; i++) {
                 if (serverSockets[i] == null) {
@@ -456,6 +471,7 @@ public class GroupMessengerActivity extends Activity {
             Log.e(TAG, "Some exception when trying to create sockets");
             Log.e(TAG, Log.getStackTraceString(e));
         }
+        return serverSockets;
     }
 
     private Uri buildUri(String scheme, String authority) {
