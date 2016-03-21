@@ -22,13 +22,19 @@ class MessageWrapper implements Serializable {
     private Double originalPriority;
     private String port;
     private int noOfReplies;
-    private long finalPriority;
 
+    public int getNoOfReplies() {
+        return noOfReplies;
+    }
 
+    public void setNoOfReplies(int noOfReplies) {
+        this.noOfReplies = noOfReplies;
+    }
 
     public static final int TYPE_MESSAGE = 1;
     public static final int TYPE_REPLY =  2;
     public static final int TYPE_ACK = 3;
+    public static final int TYPE_PING = 4;
 
     static Comparator<MessageWrapper> messageWrapperComparator = new Comparator<MessageWrapper>() {
 
@@ -94,7 +100,8 @@ class MessageWrapper implements Serializable {
     }
 
     @Override
-    public String toString() {
+    public String
+    toString() {
         return "MessageWrapper{" +
                 "data='" + data + '\'' +
                 ", newPriority=" + newPriority +
@@ -102,6 +109,7 @@ class MessageWrapper implements Serializable {
                 ", isReady=" + isReady +
                 ", originalPriority=" + originalPriority +
                 ", port='" + port + '\'' +
+                ", noOfReplies=" + noOfReplies +
                 '}';
     }
 }
