@@ -25,5 +25,4 @@ public class SimpleDhtActivity extends Activity {
         getMenuInflater().inflate(R.menu.activity_simple_dht_main, menu);
         return true;
     }
-
 }

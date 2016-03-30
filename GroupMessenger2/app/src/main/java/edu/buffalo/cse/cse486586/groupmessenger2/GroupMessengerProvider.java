@@ -44,7 +44,7 @@ public class GroupMessengerProvider extends ContentProvider {
          * TODO: You need to implement this method. Note that values will have two columns (a sequence
          * column and a value column) and one row that contains the actual (sequence, value) pair to be
          * inserted.
-         * 
+         *
          * For actual storage, you can use any option. If you know how to use SQL, then you can use
          * SQLite. But this is not a requirement. You can use other storage options, such as the
          * internal storage option that we used in PA1. If you want to use that option, please
