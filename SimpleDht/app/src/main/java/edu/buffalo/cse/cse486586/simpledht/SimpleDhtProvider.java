@@ -10,8 +10,10 @@ import android.os.AsyncTask;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
+import java.io.IOException;
 import java.net.ServerSocket;
 
+import static edu.buffalo.cse.cse486586.simpledht.Helper.asyncSendMessage;
 import static edu.buffalo.cse.cse486586.simpledht.Helper.sendMessage;
 
 
@@ -59,10 +61,15 @@ public class SimpleDhtProvider extends ContentProvider {
 
         //check if this is the god server
         if (!myPort.equalsIgnoreCase(Constants.god)) {
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             Log.v(TAG, "Contacting the god server....");
             Message message = new Message(Message.MessageType.godJoin, myPort);
 
-            sendMessage(message, Constants.god);
+            asyncSendMessage(message, Constants.god);
             Log.i(TAG, "Sent a join request to God server " + message);
         } else {
             Log.i(TAG, "This is the God server. Bow down to me, mortal.");
@@ -74,10 +81,8 @@ public class SimpleDhtProvider extends ContentProvider {
         myDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + Constants.GROUP_MESSENGER + " (" + Constants.KEY + " VARCHAR PRIMARY KEY NOT NULL, " + Constants.VALUE + " VARCHAR);");
 
         //create a sequential thingy that keeps listening for connections in a while loop
-
-
-
-
+        ServerSocket serverSocket = null;
+        new ServerTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, serverSocket );
         return true;
     }
 

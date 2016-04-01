@@ -1,23 +1,24 @@
 package edu.buffalo.cse.cse486586.simpledht;
 
-import android.os.AsyncTask;
-import android.util.Log;
+import java.util.concurrent.Callable;
 
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.net.InetAddress;
-import java.net.Socket;
-import java.net.UnknownHostException;
 import static edu.buffalo.cse.cse486586.simpledht.Helper.*;
 
 /**
  * This is a workaround for android strict mode.
  */
 
-public class AsyncSendMessageHelper implements Runnable {
-
+public class CallableSendMessage implements Callable<String> {
     private Message message;
     private String portNumber;
+
+    @Override
+    public String call() throws Exception {
+
+        sendMessage(message, portNumber);
+        return "";
+    }
+
 
     public Message getMessage() {
         return message;
@@ -33,10 +34,5 @@ public class AsyncSendMessageHelper implements Runnable {
 
     public void setPortNumber(String portNumber) {
         this.portNumber = portNumber;
-    }
-
-    @Override
-    public void run() {
-        sendMessage(message, portNumber);
     }
 }

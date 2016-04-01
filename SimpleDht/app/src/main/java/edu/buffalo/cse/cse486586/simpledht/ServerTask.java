@@ -24,9 +24,15 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
 
     @Override
     protected Void doInBackground(ServerSocket... sockets) {
+        ServerSocket serverSocket = null;
+        try {
+            serverSocket = new ServerSocket(10000);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         while (true) {
             try {
-                final ServerSocket serverSocket = sockets[0];
+                Log.i(TAG, "Waiting for new sockets on 10000...");
                 Socket socket = serverSocket.accept();
                 Log.i(TAG, "Accepted socket" +
                         socket);
@@ -41,13 +47,19 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         if (Constants.god.equalsIgnoreCase(SimpleDhtProvider.myPort)) {
                             Log.i(TAG, "Yes, I'm God.");
                             //check the hashcode.
-                            if (hashCompare(message) > 0 && hashCompare(message) < 0) {
-                                Log.i(TAG, "Node should be added between me and successor here");
-                                insertNode(message);
+                            if (successorPort != null) {
+                                if (genHash(myPort).compareTo(message.getOriginPort()) < 0 && genHash(successorPort).compareTo(message.getOriginPort()) > 0) {
+                                    Log.i(TAG, "Node should be added between me(god) and successor here");
+                                    insertNode(message);
+                                } else {
+                                    Log.i(TAG, "forward the message to successor");
+                                    message.setType(Message.MessageType.slaveJoin);
+                                    sendMessage(message, message.getOriginPort());
+                                }
                             } else {
-                                //forward the message to successor
-                                message.setType(Message.MessageType.slaveJoin);
-                                sendMessage(message, successorPort);
+                                Log.i(TAG, "God does not have a successor. Setting message's origin to sucecssor and predecessor");
+                                predecessorPort = message.getOriginPort();
+                                insertNode(message);
                             }
                         } else {
                             Log.e(TAG, "I'm not God, why did you send me a join request?");
@@ -56,15 +68,15 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         break;
                     case slaveJoin:
                         //this is a message handed down from God to join a node
-                        if (hashCompare(message) > 0 && hashCompare(message) < 0) {
+                        if (genHash(myPort).compareTo(message.getOriginPort()) < 0 && genHash(successorPort).compareTo(message.getOriginPort()) > 0) {
                             //node should be added between successor and me
+                            Log.i(TAG, "Node should be added between me and successor here");
                             insertNode(message);
                         } else {
                             //not meant for me. Forward untouched message to my successor
+                            Log.i(TAG, "forward the message to successor");
                             sendMessage(message, successorPort);
                         }
-
-
                         break;
 
                     case chSuccAndPred:
@@ -85,6 +97,9 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         Log.w(TAG, "unimplemented type." + message);
                 }
                 publishProgress(message.toString());
+                if(!socket.isClosed()) {
+                    socket.close();
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (ClassNotFoundException e) {
@@ -96,27 +111,30 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
     }
 
     private void insertNode(Message message) {
-        //1. add successor node
+        //1. add origin port as my successor. My former successor is null if I am god at startup.
         String formerSuccessor = successorPort;
         successorPort = message.getOriginPort();
         //2. tell successor to set it's successor to my former successor, and it's predecessor to me.
-        message.setType(Message.MessageType.chSuccAndPred);
-        message.setNewSuccessor(formerSuccessor);
-        message.setNewPredecessor(myPort);
-        sendMessage(message, message.getOriginPort());
-
-        //3. tell my former successor to point it's predecessor to new node's port
-        message.setType(Message.MessageType.chPredecessor);
-        message.setNewPredecessor(message.getOriginPort());
-        sendMessage(message, formerSuccessor);
+        if(formerSuccessor!=null) {
+            message.setType(Message.MessageType.chSuccAndPred);
+            message.setNewSuccessor(formerSuccessor);
+            message.setNewPredecessor(myPort);
+            sendMessage(message, message.getOriginPort());
+        } else {
+            //if i don't have a former successor, this is god at startup. Then tell new node to point both successor and predecessor to me.
+            message.setType(Message.MessageType.chSuccAndPred);
+            message.setNewSuccessor(myPort);
+            message.setNewPredecessor(myPort);
+            sendMessage(message, message.getOriginPort());
+        }
+        //3. tell my former successor(If i have one. At startup, god won't have one) to point it's predecessor to new node's port.
+        //If i don't have a former successor, no need to tell anyone anything.
+        if (formerSuccessor != null) {
+            message.setType(Message.MessageType.chPredecessor);
+            message.setNewPredecessor(message.getOriginPort());
+            sendMessage(message, formerSuccessor);
+        }
     }
-
-    private int hashCompare(Message message) throws NoSuchAlgorithmException {
-        return genHash(myPort).compareTo(genHash(message.getOriginPort()));
-    }
-
-
-
 /*
     protected void onProgressUpdate(String... strings) {
 

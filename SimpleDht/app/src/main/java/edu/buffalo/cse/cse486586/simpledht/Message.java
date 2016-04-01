@@ -1,11 +1,12 @@
 package edu.buffalo.cse.cse486586.simpledht;
 
+import java.io.Serializable;
 import java.util.HashMap;
 
-public class Message {
+public class Message implements Serializable{
 
 
-    private HashMap<String, String> messageMap = new HashMap<String, String>();
+    private HashMap<String, String> messageMap;
     private String originPort;
     private String data;
     private String newSuccessor;

@@ -7,7 +7,7 @@ public class Constants {
     public static final String KEY = "key";
     public static final String VALUE = "value";
     public static final String GROUP_MESSENGER = "GROUP_MESSENGER";
-    public static final int SERVER_PORT = 10000;
+    public static final String SERVER_PORT = "10000";
     public static final String god = "11112"; //hardcoded
 
 
