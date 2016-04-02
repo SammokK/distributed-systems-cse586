@@ -1,5 +1,6 @@
 package edu.buffalo.cse.cse486586.simpledht;
 
+import android.os.AsyncTask;
 import android.util.Log;
 
 import java.io.IOException;
@@ -48,23 +49,25 @@ public class Helper {
         return formatter.toString();
     }
 
-    public static boolean sendMessage(Message message, String port) {
+    public boolean sendMessage(Message message, String port) {
         Log.i(TAG, "sending message " + message + "on port " + port);
         Socket sendSocket = null;
         try {
-            message.setHopCount(message.getHopCount() + 1);
+//            message.setHopCount(message.getHopCount() + 1);
             sendSocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                     Integer.parseInt(port));
             ObjectOutputStream oos = new ObjectOutputStream(sendSocket.getOutputStream());
-            //convert to json because there's some problem with serialization
+            //todo convert to json because there's some problem with serialization
             oos.writeObject(message);
             oos.flush();
-
+            oos.reset();
+            sendSocket.close();
         } catch (IOException e) {
+            e.printStackTrace();
             Log.e(TAG, Log.getStackTraceString(e));
             return false;
         } finally {
-            if (!sendSocket.isClosed()) {
+            if (sendSocket != null && !sendSocket.isClosed()) {
                 try {
                     sendSocket.close();
                 } catch (IOException e) {
@@ -85,26 +88,10 @@ public class Helper {
      */
     public static boolean asyncSendMessage(Message message, String port) {
         Log.i(TAG, "Inside asyncSendMessage " + message + "on port " + port);
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
         CallableSendMessage callableSendMessage = new CallableSendMessage();
         callableSendMessage.setMessage(message);
         callableSendMessage.setPortNumber(port);
-        Future<String> future = executorService.submit(callableSendMessage);
-        try {
-            future.get();
-            Log.i(TAG, "Got future object asyncSendMessage " + message + "on port " + port);
-        } catch (InterruptedException e) {
-            Log.e(TAG, Log.getStackTraceString(e));
-            return false;
-        } catch (ExecutionException e) {
-            Log.e(TAG, Log.getStackTraceString(e));
-            return false;
-
-        } finally {
-            if (!executorService.isShutdown()) {
-                executorService.shutdownNow();
-            }
-        }
+        callableSendMessage.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, null);
         return true;
     }
 }

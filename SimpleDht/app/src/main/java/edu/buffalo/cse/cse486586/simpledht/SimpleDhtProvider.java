@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 
 import static edu.buffalo.cse.cse486586.simpledht.Helper.asyncSendMessage;
-import static edu.buffalo.cse.cse486586.simpledht.Helper.sendMessage;
+//import static edu.buffalo.cse.cse486586.simpledht.Helper.sendMessage;
 
 
 public class SimpleDhtProvider extends ContentProvider {
@@ -62,7 +62,7 @@ public class SimpleDhtProvider extends ContentProvider {
         //check if this is the god server
         if (!myPort.equalsIgnoreCase(Constants.god)) {
             try {
-                Thread.sleep(3000);
+                Thread.sleep(7000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }

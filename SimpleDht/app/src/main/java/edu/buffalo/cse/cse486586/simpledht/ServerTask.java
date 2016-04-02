@@ -9,8 +9,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.NoSuchAlgorithmException;
 
+import static edu.buffalo.cse.cse486586.simpledht.Helper.asyncSendMessage;
 import static edu.buffalo.cse.cse486586.simpledht.Helper.genHash;
-import static edu.buffalo.cse.cse486586.simpledht.Helper.sendMessage;
 import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.myPort;
 import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.predecessorPort;
 import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.successorPort;
@@ -30,34 +30,42 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
         } catch (IOException e) {
             e.printStackTrace();
         }
+        Socket socket = null;
         while (true) {
             try {
+                socket = null;
                 Log.i(TAG, "Waiting for new sockets on 10000...");
-                Socket socket = serverSocket.accept();
+                Log.i(TAG, "Me: " + myPort + "; successor: " + successorPort + "; predecessor=" + predecessorPort);
+                socket = serverSocket.accept();
                 Log.i(TAG, "Accepted socket" +
                         socket);
                 ObjectInputStream objectInputStream = new ObjectInputStream(socket.getInputStream());
-                Log.v(TAG, "Waiting for a message on this socket " + socket);
-                Message message = (Message) objectInputStream.readObject();
-
+                Object object = objectInputStream.readObject();
+                Message message = (Message) object;
+                Log.i(TAG, "Received message " + message + " on socket " + socket);
+                if(!socket.isClosed()) {
+                    socket.close();
+                }
+                socket = null;
                 switch (message.getType()) {
                     case godJoin:
-                        Log.i(TAG, "Received a join request!" + message);
+                        Log.i(TAG, "God received a join request " + message);
                         //check if i'm god
                         if (Constants.god.equalsIgnoreCase(SimpleDhtProvider.myPort)) {
-                            Log.i(TAG, "Yes, I'm God.");
-                            //check the hashcode.
+                            Log.i(TAG, "Yes, I'm God. I can process this request.");
                             if (successorPort != null) {
+                                //Yes, God has a successor, this is not the first join.
                                 if (genHash(myPort).compareTo(message.getOriginPort()) < 0 && genHash(successorPort).compareTo(message.getOriginPort()) > 0) {
                                     Log.i(TAG, "Node should be added between me(god) and successor here");
                                     insertNode(message);
                                 } else {
-                                    Log.i(TAG, "forward the message to successor");
+                                    Log.i(TAG, "I already have a successor. Send a slave join message to successor.");
                                     message.setType(Message.MessageType.slaveJoin);
-                                    sendMessage(message, message.getOriginPort());
+                                    asyncSendMessage(message, successorPort);
                                 }
                             } else {
-                                Log.i(TAG, "God does not have a successor. Setting message's origin to sucecssor and predecessor");
+                                //This is the first join ever. Just insert the node here.
+                                Log.i(TAG, "God does not have a successor yet. Setting message's origin to successor and predecessor");
                                 predecessorPort = message.getOriginPort();
                                 insertNode(message);
                             }
@@ -72,10 +80,13 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                             //node should be added between successor and me
                             Log.i(TAG, "Node should be added between me and successor here");
                             insertNode(message);
+                        } else if (successorPort.equalsIgnoreCase(Constants.god)) {
+                            Log.i(TAG, "My successor is God. Just insert it between me and God since it hasn't been inserted anywhere else");
+                            insertNode(message);
                         } else {
                             //not meant for me. Forward untouched message to my successor
                             Log.i(TAG, "forward the message to successor");
-                            sendMessage(message, successorPort);
+                            asyncSendMessage(message, successorPort);
                         }
                         break;
 
@@ -97,42 +108,60 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         Log.w(TAG, "unimplemented type." + message);
                 }
                 publishProgress(message.toString());
-                if(!socket.isClosed()) {
-                    socket.close();
-                }
+
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (ClassNotFoundException e) {
                 e.printStackTrace();
             } catch (NoSuchAlgorithmException e) {
                 e.printStackTrace();
+            } finally {
+                try {
+                    if (socket!=null && !socket.isClosed()) {
+                        socket.close();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
+
         }
     }
 
     private void insertNode(Message message) {
-        //1. add origin port as my successor. My former successor is null if I am god at startup.
+        Log.i(TAG, "Inserting node " + message.getOriginPort() + " between me " + myPort + " and successor " + successorPort);
+        //add origin port as my successor. My former successor is null if I am god at startup.
         String formerSuccessor = successorPort;
         successorPort = message.getOriginPort();
-        //2. tell successor to set it's successor to my former successor, and it's predecessor to me.
-        if(formerSuccessor!=null) {
+        if (formerSuccessor != null) {
+            //if i'm not god, tell successor to set it's successor to my former successor, and it's predecessor to me.
             message.setType(Message.MessageType.chSuccAndPred);
             message.setNewSuccessor(formerSuccessor);
             message.setNewPredecessor(myPort);
-            sendMessage(message, message.getOriginPort());
+            asyncSendMessage(message, message.getOriginPort());
         } else {
             //if i don't have a former successor, this is god at startup. Then tell new node to point both successor and predecessor to me.
             message.setType(Message.MessageType.chSuccAndPred);
             message.setNewSuccessor(myPort);
             message.setNewPredecessor(myPort);
-            sendMessage(message, message.getOriginPort());
+            asyncSendMessage(message, message.getOriginPort());
+        }
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
         //3. tell my former successor(If i have one. At startup, god won't have one) to point it's predecessor to new node's port.
         //If i don't have a former successor, no need to tell anyone anything.
         if (formerSuccessor != null) {
             message.setType(Message.MessageType.chPredecessor);
             message.setNewPredecessor(message.getOriginPort());
-            sendMessage(message, formerSuccessor);
+            asyncSendMessage(message, formerSuccessor);
+        }
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 /*

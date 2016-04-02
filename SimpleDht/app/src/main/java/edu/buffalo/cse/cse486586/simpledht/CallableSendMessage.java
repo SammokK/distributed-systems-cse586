@@ -1,24 +1,27 @@
 package edu.buffalo.cse.cse486586.simpledht;
 
-import java.util.concurrent.Callable;
+import android.os.AsyncTask;
+import android.util.Log;
 
-import static edu.buffalo.cse.cse486586.simpledht.Helper.*;
+import java.net.ServerSocket;
+
 
 /**
  * This is a workaround for android strict mode.
  */
 
-public class CallableSendMessage implements Callable<String> {
+public class CallableSendMessage extends AsyncTask<ServerSocket, String, Void> {
     private Message message;
     private String portNumber;
 
+//    private static Object lock = new Object();
+
     @Override
-    public String call() throws Exception {
-
-        sendMessage(message, portNumber);
-        return "";
+    protected Void doInBackground(ServerSocket... params) {
+        Log.i("CallableSendMessage", "Inside SendMessage doInBackground");
+        new Helper().sendMessage(message, portNumber);
+        return null;
     }
-
 
     public Message getMessage() {
         return message;
