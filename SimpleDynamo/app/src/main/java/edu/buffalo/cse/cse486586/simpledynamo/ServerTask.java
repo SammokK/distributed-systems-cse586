@@ -1,4 +1,4 @@
-package edu.buffalo.cse.cse486586.simpledht;
+package edu.buffalo.cse.cse486586.simpledynamo;
 
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -12,12 +12,13 @@ import java.net.Socket;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 
-import static edu.buffalo.cse.cse486586.simpledht.Helper.genHash;
-import static edu.buffalo.cse.cse486586.simpledht.Helper.isItMyNode;
-import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.myDatabase;
-import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.myPort;
-import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.predecessorPort;
-import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.successorPort;
+import static edu.buffalo.cse.cse486586.simpledynamo.Helper.genHash;
+import static edu.buffalo.cse.cse486586.simpledynamo.Helper.isItMyNode;
+import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.myDatabase;
+import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.myPort;
+import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.predecessorPort;
+import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.successorPort;
+
 /**
  * Created by smokey on 3/28/16.
  */
@@ -77,7 +78,7 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                     case godJoin:
                         Log.i(TAG, "God: received a join request " + message);
                         //check if i'm god
-                        if (Constants.god.equalsIgnoreCase(SimpleDhtProvider.myPort)) {
+                        if (Constants.god.equalsIgnoreCase(SimpleDynamoProvider.myPort)) {
                             Log.d(TAG, "God: Yes I'm God.");
                             if (successorPort != null) {
                                 //check if my predecessor's value is higher than mine
@@ -178,7 +179,7 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         if(myPort.equalsIgnoreCase(message.getOriginPort())) {
                             Log.i("QUERY STAR", "query * finished.");
                             //set the values to query star map
-                            SimpleDhtProvider.queryStarMessage = message;
+                            SimpleDynamoProvider.queryStarMessage = message;
                             break;
                         }
                         HashMap<String, String> queryStarMap = new HashMap<String, String>();
@@ -192,7 +193,7 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         break;
                     case queryResult:
                         Log.i("QUERY RESULT", "Received returned query result object with result map"  + message.getMessageMap());
-                        SimpleDhtProvider.queryMap.put(message.getMessageMap().get(Constants.KEY), message.getMessageMap().get(Constants.VALUE));
+                        SimpleDynamoProvider.queryMap.put(message.getMessageMap().get(Constants.KEY), message.getMessageMap().get(Constants.VALUE));
                         break;
                     case query:
                         Log.i("QUERY", "Received query message");

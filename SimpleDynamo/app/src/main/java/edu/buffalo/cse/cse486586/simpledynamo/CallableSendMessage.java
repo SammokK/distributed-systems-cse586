@@ -1,4 +1,4 @@
-package edu.buffalo.cse.cse486586.simpledht;
+package edu.buffalo.cse.cse486586.simpledynamo;
 
 import android.os.AsyncTask;
 import android.util.Log;

@@ -1,4 +1,4 @@
-package edu.buffalo.cse.cse486586.simpledht;
+package edu.buffalo.cse.cse486586.simpledynamo;
 
 import android.content.ContentValues;
 import android.database.Cursor;
@@ -14,12 +14,12 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Formatter;
 
-import static edu.buffalo.cse.cse486586.simpledht.ServerTask.hashMe;
-import static edu.buffalo.cse.cse486586.simpledht.ServerTask.hashPredecessor;
-import static edu.buffalo.cse.cse486586.simpledht.ServerTask.hashSuccessor;
-import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.myPort;
-import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.predecessorPort;
-import static edu.buffalo.cse.cse486586.simpledht.SimpleDhtProvider.successorPort;
+import static edu.buffalo.cse.cse486586.simpledynamo.ServerTask.hashMe;
+import static edu.buffalo.cse.cse486586.simpledynamo.ServerTask.hashPredecessor;
+import static edu.buffalo.cse.cse486586.simpledynamo.ServerTask.hashSuccessor;
+import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.myPort;
+import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.predecessorPort;
+import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.successorPort;
 
 /**
  * Created by smokey on 3/26/16.
@@ -122,6 +122,50 @@ public class Helper {
             return false;
         }
     }
+
+    //tells which node the insert,delete, query is supposed to happen. Use this logic with the lookup successor to figure out replication logic
+    public static String whichNode(String key) {
+
+
+
+
+        return null;
+    }
+
+    private String lookupSuccessor(String port) {
+        String successorPort = null;
+        //Calculate predecessor and successor ports
+        if (myPort.equalsIgnoreCase("11116")) {
+            successorPort = "11120";
+        } else if (myPort.equalsIgnoreCase("11120")) {
+            successorPort = "11124";
+        } else if (myPort.equalsIgnoreCase("11124")) {
+            successorPort = "11112";
+        } else if (myPort.equalsIgnoreCase("11112")) {
+            successorPort = "11108";
+        } else if (myPort.equalsIgnoreCase("11108")) {
+            successorPort = "11116";
+        }
+        return successorPort;
+    }
+
+    private String lookupPredecessor(String port) {
+        String successorPort = null;
+        //Calculate predecessor and successor ports
+        if (myPort.equalsIgnoreCase("11116")) {
+            successorPort = "11120";
+        } else if (myPort.equalsIgnoreCase("11120")) {
+            successorPort = "11124";
+        } else if (myPort.equalsIgnoreCase("11124")) {
+            successorPort = "11112";
+        } else if (myPort.equalsIgnoreCase("11112")) {
+            successorPort = "11108";
+        } else if (myPort.equalsIgnoreCase("11108")) {
+            successorPort = "11116";
+        }
+        return successorPort;
+    }
+
 
     public long insert(ContentValues values, SQLiteDatabase myDatabase) {
         Log.i("INSERT helper", "Inserting... " + values);

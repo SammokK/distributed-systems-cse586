@@ -1,6 +1,4 @@
-package edu.buffalo.cse.cse486586.simpledht;
-
-import android.content.ContentValues;
+package edu.buffalo.cse.cse486586.simpledynamo;
 
 import java.io.Serializable;
 import java.util.HashMap;
