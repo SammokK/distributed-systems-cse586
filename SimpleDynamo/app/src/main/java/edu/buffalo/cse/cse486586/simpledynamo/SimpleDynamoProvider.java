@@ -16,7 +16,9 @@ import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static edu.buffalo.cse.cse486586.simpledynamo.Helper.asyncSendMessage;
+import static edu.buffalo.cse.cse486586.simpledynamo.Helper.findNode;
 import static edu.buffalo.cse.cse486586.simpledynamo.Helper.isItMyNode;
+import static edu.buffalo.cse.cse486586.simpledynamo.Helper.lookupSuccessor;
 
 //import static edu.buffalo.cse.cse486586.simpledht.Helper.sendMessage;
 
@@ -25,7 +27,6 @@ public class SimpleDynamoProvider extends ContentProvider {
 	static  SQLiteDatabase myDatabase = null;
 
 	static String successorPort;
-	static String secondSuccessorPort;
 	static String predecessorPort;
 	static String myPort = null;
 
@@ -44,41 +45,44 @@ public class SimpleDynamoProvider extends ContentProvider {
 
 	@Override
 	public Uri insert(Uri uri, ContentValues values) {
-		new Helper().recalculateHashValues();
 		// todo this is only local insertion. Add stuff for global insertion.
 		Log.i(TAG, "start of INSERT " + values.toString());
 
-		if (predecessorPort == null || successorPort == null) {
-			Log.i("INSERT", "There is no successor or predecessor");
-			long returner = new Helper().insert(values, myDatabase);
-			Log.i("TAG", "inserted " + values.toString() + "," + "return value->" + returner);
-			return null;
-		} else {
-			String key = (String)values.get(Constants.KEY);
-			String value = (String)values.get(Constants.VALUE);
+		//find which three nodes must insert
+		String key = (String) values.get(Constants.KEY);
+		String value = (String) values.get(Constants.VALUE);
+		Message message = new Message(Message.MessageType.insert, myPort);
+		HashMap<String, String> map = new HashMap<String, String>();
+		map.put(Constants.KEY, key);
+		map.put(Constants.VALUE, value);
+		message.setMessageMap(map);
+		String primaryPort = findNode(key);
+		String secondPort = lookupSuccessor(primaryPort);
+		String thirdPort = lookupSuccessor(secondPort);
 
-			Log.i("INSERT", "Inserting " + values);
-			//check where the thing should be inserted
-			if(isItMyNode(key)) {
-				Log.i("INSERT", "Insert into my node");
-				long returner = new Helper().insert(values, myDatabase);
-				Log.i("INSERT", "inserted " + values.toString() + "," + "return value->" + returner);
-				return null;
-			} else {
-				//forward the message to successor
-				Log.i("INSERT", "Send to successor");
-				Message message = new Message(Message.MessageType.insert, myPort);
-				HashMap<String, String> map = new HashMap<String, String>();
-				map.put(Constants.KEY, key);
-				map.put(Constants.VALUE, value);
-				message.setMessageMap(map);
-				asyncSendMessage(message, successorPort);
-				Log.i("INSERT", "Send to successor " + message);
-			}
-		}
+		//send the messages
+		insertToNode(message, primaryPort);
+		insertToNode(message, secondPort);
+		insertToNode(message, thirdPort);
 		return null;
 	}
 
+	private void insertToNode(Message message, String port) {
+		Log.i("INSERT_TO_NODE", "Inserting " + message + " to node " + port + " . My port is " + myPort);
+		if (!port.equalsIgnoreCase(myPort)) {
+			try {
+				asyncSendMessage(message, port);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		} else {
+			HashMap<String, String> insertMap = message.getMessageMap();
+			ContentValues values = new ContentValues();
+			values.put(Constants.KEY, insertMap.get(Constants.KEY));
+			values.put(Constants.VALUE, insertMap.get(Constants.VALUE));
+			new Helper().insert(values, myDatabase);
+		}
+	}
 
 
 	static final String TAG = SimpleDynamoProvider.class.getSimpleName();
@@ -88,12 +92,6 @@ public class SimpleDynamoProvider extends ContentProvider {
 		TelephonyManager tel = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);
 		String portStr = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
 		myPort = String.valueOf((Integer.parseInt(portStr) * 2));
-
-		successorPort = lookupSuccessor(myPort);
-		secondSuccessorPort = lookupSuccessor(successorPort);
-		if (successorPort == null) {
-			throw new RuntimeException("successor port is null... exiting");
-		}
 	}
 
 
@@ -104,22 +102,17 @@ public class SimpleDynamoProvider extends ContentProvider {
 		//todo dht creation stuff
 		//todo create sockets
 
+		//Find out what my port number is
 		initializePorts();
 
 		Log.i(TAG, "My port is " + myPort);
 
 		//check if this is the god server
 		if (!myPort.equalsIgnoreCase(Constants.god)) {
-//            try {
-//                Thread.sleep(10000);
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            }
-			Log.v(TAG, "Contacting the god server....");
-			Message message = new Message(Message.MessageType.godJoin, myPort);
-
-			asyncSendMessage(message, Constants.god);
-			Log.i(TAG, "Sent a join request to God server " + message);
+			Log.v(TAG, "This is not the God server....");
+//			Message message = new Message(Message.MessageType.godJoin, myPort);
+//			asyncSendMessage(message, Constants.god);
+//			Log.i(TAG, "Sent a join request to God server " + message);
 		} else {
 			Log.i(TAG, "This is the God server. Bow down to me, mortal.");
 		}
@@ -166,7 +159,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 		}
 		if (selection.equalsIgnoreCase("*")) {
 			synchronized (lock) {
-				Log.i("QUERY", "Querying everything in DHT");
+				Log.i("QUERY", "Querying everything in Dynamo");
 				//select key, value from table
 				Message message = new Message(Message.MessageType.queryStar, myPort);
 				HashMap<String, String> map = new HashMap<String, String>();

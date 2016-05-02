@@ -163,17 +163,27 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                     case insert:
                         Log.i("INSERT", "Received an insert request" + message);
                         HashMap<String, String> insertMap = message.getMessageMap();
-                        if (isItMyNode(insertMap.get(Constants.KEY))) {
-                            Log.i("INSERT", "Inserting at my node " + message);
+//                        if (isItMyNode(insertMap.get(Constants.KEY))) {
+//                            Log.i("INSERT", "Inserting at my node " + message);
+//
+//                            ContentValues values = new ContentValues();
+//                            values.put(Constants.KEY, insertMap.get(Constants.KEY));
+//                            values.put(Constants.VALUE, insertMap.get(Constants.VALUE));
+//                            new Helper().insert(values, myDatabase);
+//                        } else {
+//                            Log.i("INSERT", "Sending insert to successor " + message);
+//                            new Helper().sendMessage(message, successorPort);
+//                        }
 
-                            ContentValues values = new ContentValues();
-                            values.put(Constants.KEY, insertMap.get(Constants.KEY));
-                            values.put(Constants.VALUE, insertMap.get(Constants.VALUE));
-                            new Helper().insert(values, myDatabase);
-                        } else {
-                            Log.i("INSERT", "Sending insert to successor " + message);
-                            new Helper().sendMessage(message, successorPort);
-                        }
+
+
+                        //directly insert into this node.
+
+                        ContentValues values = new ContentValues();
+                        values.put(Constants.KEY, insertMap.get(Constants.KEY));
+                        values.put(Constants.VALUE, insertMap.get(Constants.VALUE));
+                        new Helper().insert(values, myDatabase);
+
                         break;
                     case queryStar:
                         if(myPort.equalsIgnoreCase(message.getOriginPort())) {

@@ -1,6 +1,7 @@
 package edu.buffalo.cse.cse486586.simpledynamo;
 
 import android.content.ContentValues;
+import android.content.SyncStatusObserver;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.AsyncTask;
@@ -47,7 +48,13 @@ public class Helper {
     }*/
 
     public static String genHash(String input) throws NoSuchAlgorithmException {
+
+        if(input == null) {
+            Log.e(TAG, "input is null!!!");
+        }
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+        Log.i("genhash", "" + sha1);
+        Log.i("genhash", "" + input.getBytes());
         byte[] sha1Hash = sha1.digest(input.getBytes());
         Formatter formatter = new Formatter();
         for (byte b : sha1Hash) {
@@ -123,52 +130,100 @@ public class Helper {
         }
     }
 
-    //tells which node the insert,delete, query is supposed to happen. Use this logic with the lookup successor to figure out replication logic
-    public static String whichNode(String key) {
-
-
-
-
+    public static String findNode(String key) {
+        Log.i("FIND_NODE", "Input with key=" + key );
+        String returnerValue = null;
+        for (int i = 0; i<Constants.REMOTE_PORTS_IN_CONNECTED_ORDER.length; i++) {
+            String port = Constants.REMOTE_PORTS_IN_CONNECTED_ORDER[i];
+            if (isItThisNode(port, key)) {
+                Log.i("FIND_NODE", "For key=" + key + " , node is " + port);
+                return port;
+            }
+        }
+        if (returnerValue == null) {
+            new Exception("NO PORT FOUND").printStackTrace();
+            Log.e(TAG + " NO PORT FOUND", "No port found for key= " + key);
+            throw new RuntimeException("ERROR: no port found");
+        }
         return null;
     }
 
-    private String lookupSuccessor(String port) {
+
+
+    public static boolean isItThisNode(String node, String key) {
+        Log.i("INSIDE_NODE","Checking if the key " + key + " belongs to node " + node);
+        String hashedKey = null;
+        String hashedThisNode = null;
+        String localHashedPredecessor = null;
+        String localHashedSuccessor = null;
+        try {
+            hashedKey = genHash(key);
+            hashedThisNode = genHash(node);
+            localHashedPredecessor = genHash(lookupPredecessor(node));
+            localHashedSuccessor = genHash(lookupSuccessor(node));
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            throw new RuntimeException("Some problem with hashing");
+        }
+        if (hashedThisNode.compareTo(localHashedPredecessor) < 0) {
+            if (hashedThisNode.compareTo(hashedKey) > 0 || hashedKey.compareTo(localHashedPredecessor) > 0) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+        if (hashedThisNode.compareTo(hashedKey) > 0 && hashedKey.compareTo(localHashedSuccessor) > 0) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    //the order is 11116 11120 11124 11112 11108
+    public  static String lookupSuccessor(String port) {
         String successorPort = null;
         //Calculate predecessor and successor ports
-        if (myPort.equalsIgnoreCase("11116")) {
+        if (port.equalsIgnoreCase("11116")) {
             successorPort = "11120";
-        } else if (myPort.equalsIgnoreCase("11120")) {
+        } else if (port.equalsIgnoreCase("11120")) {
             successorPort = "11124";
-        } else if (myPort.equalsIgnoreCase("11124")) {
+        } else if (port.equalsIgnoreCase("11124")) {
             successorPort = "11112";
-        } else if (myPort.equalsIgnoreCase("11112")) {
+        } else if (port.equalsIgnoreCase("11112")) {
             successorPort = "11108";
-        } else if (myPort.equalsIgnoreCase("11108")) {
+        } else if (port.equalsIgnoreCase("11108")) {
             successorPort = "11116";
+        }else {
+            throw new RuntimeException("Port " + port + " not found!!");
         }
+        Log.i("LOOKUP_SUCCESSOR", "Successor of port " + port  + " is  " + successorPort);
         return successorPort;
     }
 
-    private String lookupPredecessor(String port) {
-        String successorPort = null;
+
+    //the order is 11116 11120 11124 11112 11108
+    public static String lookupPredecessor(String port) {
+        String predecessorPort;
         //Calculate predecessor and successor ports
-        if (myPort.equalsIgnoreCase("11116")) {
-            successorPort = "11120";
-        } else if (myPort.equalsIgnoreCase("11120")) {
-            successorPort = "11124";
-        } else if (myPort.equalsIgnoreCase("11124")) {
-            successorPort = "11112";
-        } else if (myPort.equalsIgnoreCase("11112")) {
-            successorPort = "11108";
-        } else if (myPort.equalsIgnoreCase("11108")) {
-            successorPort = "11116";
+        if (port.equalsIgnoreCase("11116")) {
+            predecessorPort = "11108";
+        } else if (port.equalsIgnoreCase("11120")) {
+            predecessorPort = "11116";
+        } else if (port.equalsIgnoreCase("11124")) {
+            predecessorPort = "11120";
+        } else if (port.equalsIgnoreCase("11112")) {
+            predecessorPort = "11124";
+        } else if (port.equalsIgnoreCase("11108")) {
+            predecessorPort = "11112";
+        } else {
+            throw new RuntimeException("Port " + port + " not found!!");
         }
-        return successorPort;
+        return predecessorPort;
     }
 
 
     public long insert(ContentValues values, SQLiteDatabase myDatabase) {
-        Log.i("INSERT helper", "Inserting... " + values);
+        Log.i("INSERT_HELPER", "Inserting... " + values);
         long returner = 0;
         synchronized (lock) {
             returner = myDatabase.insertWithOnConflict(Constants.SIMPLE_DHT, null, values, SQLiteDatabase.CONFLICT_REPLACE);
