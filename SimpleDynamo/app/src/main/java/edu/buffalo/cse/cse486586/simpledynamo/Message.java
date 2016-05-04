@@ -7,7 +7,7 @@ import java.util.UUID;
 public class Message implements Serializable{
 
 
-    private HashMap<String, String> messageMap;
+    private HashMap<String, String> messageMap = new HashMap<String, String>();
     private String originPort;
     private String data;
 
@@ -15,6 +15,7 @@ public class Message implements Serializable{
     private String newPredecessor;
     private String isProcessed;
     private Integer hopCount = new Integer(0);
+    private Integer queryStarCount = 0;
 
     public String getSenderPort() {
         return senderPort;
@@ -68,8 +69,16 @@ public class Message implements Serializable{
         this.newPredecessor = newPredecessor;
     }
 
+    public Integer getQueryStarCount() {
+        return queryStarCount;
+    }
+
+    public void setQueryStarCount(Integer queryStarCount) {
+        this.queryStarCount = queryStarCount;
+    }
+
     public enum MessageType {
-        godJoin, slaveJoin, chSuccessor, chPredecessor, chSuccAndPred , insert, query, update, delete, queryStar, queryResult
+        godJoin, slaveJoin, chSuccessor, chPredecessor, chSuccAndPred , insert, query, update, delete, queryStar, queryResult, queryStarResult
     };
     private MessageType type;
 

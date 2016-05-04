@@ -13,7 +13,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 
 import static edu.buffalo.cse.cse486586.simpledynamo.Helper.genHash;
-import static edu.buffalo.cse.cse486586.simpledynamo.Helper.isItMyNode;
 import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.myDatabase;
 import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.myPort;
 import static edu.buffalo.cse.cse486586.simpledynamo.SimpleDynamoProvider.predecessorPort;
@@ -45,7 +44,6 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                 TAG = ServerTask.class.getSimpleName();
                 socket = null;
                 Log.i(TAG, "Waiting for new sockets on 10000...");
-                Log.i(TAG, " predecessorPort: " + predecessorPort + "; me: " + myPort + "; successorPort=" + successorPort);
                 hashMe = genHash(String.valueOf(Integer.parseInt(myPort) / 2));
                 hashSuccessor = null;
                 if (successorPort != null) {
@@ -183,54 +181,51 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         values.put(Constants.KEY, insertMap.get(Constants.KEY));
                         values.put(Constants.VALUE, insertMap.get(Constants.VALUE));
                         new Helper().insert(values, myDatabase);
-
+                        Log.i("INSERT", "Inserted message" + message);
                         break;
                     case queryStar:
-                        if(myPort.equalsIgnoreCase(message.getOriginPort())) {
-                            Log.i("QUERY STAR", "query * finished.");
-                            //set the values to query star map
-                            SimpleDynamoProvider.queryStarMessage = message;
-                            break;
-                        }
+                        Log.i("QUERY_STAR_REQUEST", "Received QUERY  query star result object with map map"  + message.getMessageMap());
                         HashMap<String, String> queryStarMap = new HashMap<String, String>();
-                        Cursor queryStarCursor = new Helper().query(myDatabase);
-                        queryStarCursor.moveToPosition(-1);
-                        while(queryStarCursor.moveToNext()) {
-                            queryStarMap.put(queryStarCursor.getString(queryStarCursor.getColumnIndex(Constants.KEY)), queryStarCursor.getString(queryStarCursor.getColumnIndex(Constants.VALUE)));
+                        //query everything in this node
+
+                        Cursor cursor = new Helper().query(myDatabase);
+                        HashMap<String, String> map = new HashMap<String, String>();
+                        while (cursor.moveToNext()) {
+                            map.put(cursor.getString(cursor.getColumnIndex(Constants.KEY)), cursor.getString(cursor.getColumnIndex(Constants.VALUE)));
                         }
-                        message.getMessageMap().putAll(queryStarMap);
-                        new Helper().sendMessage(message, successorPort);
+
+                        Message queryStarReplyMessage = new Message(Message.MessageType.queryStarResult, myPort);
+                        queryStarReplyMessage.setMessageMap(map);
+                        new Helper().sendMessage(queryStarReplyMessage, message.getOriginPort());
+                        Log.i("QUERY_RESULT", "query result " +map);
+                        break;
+                    case queryStarResult:
+                        Log.i("QUERY_STAR_RESULT", "Received query star result object with result map" + message.getMessageMap());
+                        SimpleDynamoProvider.queryStarMessage.getMessageMap().putAll(message.getMessageMap());
+                        SimpleDynamoProvider.queryStarMessage.setQueryStarCount(SimpleDynamoProvider.queryStarMessage.getQueryStarCount() + 1);
                         break;
                     case queryResult:
-                        Log.i("QUERY RESULT", "Received returned query result object with result map"  + message.getMessageMap());
+                        Log.i("QUERY RESULT", "Received returned query result object with result map" + message.getMessageMap());
                         SimpleDynamoProvider.queryMap.put(message.getMessageMap().get(Constants.KEY), message.getMessageMap().get(Constants.VALUE));
                         break;
                     case query:
-                        Log.i("QUERY", "Received query message");
-                        if (isItMyNode(message.getData())) {
-                            Log.i("QUERY", "belongs here, querying.");
-                            Cursor queryCursor = new Helper().query(message.getData(), myDatabase);
-                            HashMap<String, String> queryMap = new HashMap<String, String>();
-                            queryCursor.moveToPosition(-1);
-                            while (queryCursor.moveToNext()) {
-                                // Extract data.
-                                queryMap.put(Constants.KEY, queryCursor.getString(queryCursor.getColumnIndex(Constants.KEY)));
-                                queryMap.put(Constants.VALUE, queryCursor.getString(queryCursor.getColumnIndex(Constants.VALUE)));
-                            }
-                            message.setType(Message.MessageType.queryResult);
-                            message.setMessageMap(queryMap);
-                            new Helper().sendMessage(message, message.getOriginPort());
-                        } else {
-                            Log.i("QUERY", "Sending query to successor");
-                            new Helper().sendMessage(message, successorPort);
+                        Log.i("QUERY", "Received query request" + message.getData());
+                        Cursor queryCursor = new Helper().query(message.getData(), myDatabase);
+                        HashMap<String, String> queryMap = new HashMap<String, String>();
+                        queryCursor.moveToPosition(-1);
+                        while (queryCursor.moveToNext()) {
+                            // Extract data.
+                            queryMap.put(Constants.KEY, queryCursor.getString(queryCursor.getColumnIndex(Constants.KEY)));
+                            queryMap.put(Constants.VALUE, queryCursor.getString(queryCursor.getColumnIndex(Constants.VALUE)));
                         }
-
-
+                        message.setType(Message.MessageType.queryResult);
+                        message.setMessageMap(queryMap);
+                        new Helper().sendMessage(message, message.getOriginPort());
                         break;
                     default:
                         Log.e(TAG, "unimplemented type." + message);
                 }
-                publishProgress(message.toString());
+//                publishProgress(message.toString());
 
             } catch (IOException e) {
                 e.printStackTrace();

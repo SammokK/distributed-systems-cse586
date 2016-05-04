@@ -3,6 +3,7 @@ package edu.buffalo.cse.cse486586.simpledynamo;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -34,7 +35,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 		new Helper().recalculateHashValues();
 		//todo check to see if the message is in this node or elsewhere, if it is this node continue to below line
-		myDatabase.delete(Constants.SIMPLE_DHT, Constants.KEY + "=?", new String[]{selection});
+		myDatabase.delete(Constants.SIMPLE_DYNAMO, Constants.KEY + "=?", new String[]{selection});
 		return 0;
 	}
 
@@ -57,13 +58,10 @@ public class SimpleDynamoProvider extends ContentProvider {
 		map.put(Constants.VALUE, value);
 		message.setMessageMap(map);
 		String primaryPort = findNode(key);
-		String secondPort = lookupSuccessor(primaryPort);
-		String thirdPort = lookupSuccessor(secondPort);
-
 		//send the messages
 		insertToNode(message, primaryPort);
-		insertToNode(message, secondPort);
-		insertToNode(message, thirdPort);
+		insertToNode(message, lookupSuccessor(primaryPort));
+		insertToNode(message, lookupSuccessor(lookupSuccessor(primaryPort)));
 		return null;
 	}
 
@@ -76,6 +74,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 				e.printStackTrace();
 			}
 		} else {
+			Log.i("INSERT_TO_NODE_LOCAL", "Inserting " + message + " to local db");
 			HashMap<String, String> insertMap = message.getMessageMap();
 			ContentValues values = new ContentValues();
 			values.put(Constants.KEY, insertMap.get(Constants.KEY));
@@ -94,8 +93,8 @@ public class SimpleDynamoProvider extends ContentProvider {
 		myPort = String.valueOf((Integer.parseInt(portStr) * 2));
 	}
 
-
-
+	boolean recoveryMode = false;
+	SharedPreferences preferences = null;
 	@Override
 	public boolean onCreate() {
 		Log.v(TAG, "Inside oncreate()");
@@ -106,74 +105,82 @@ public class SimpleDynamoProvider extends ContentProvider {
 		initializePorts();
 
 		Log.i(TAG, "My port is " + myPort);
-
-		//check if this is the god server
-		if (!myPort.equalsIgnoreCase(Constants.god)) {
-			Log.v(TAG, "This is not the God server....");
-//			Message message = new Message(Message.MessageType.godJoin, myPort);
-//			asyncSendMessage(message, Constants.god);
-//			Log.i(TAG, "Sent a join request to God server " + message);
-		} else {
-			Log.i(TAG, "This is the God server. Bow down to me, mortal.");
-		}
 		//db creation stuff goes here
 		DbHelper dbHelper = new DbHelper(getContext(), "SimpleDht.db", null, 1);
+
+		SharedPreferences isRecovery = this.getContext().getSharedPreferences("isRecovery", 0);
+		if (isRecovery.getBoolean("isRecovery", true)) {
+			isRecovery.edit().putBoolean("isRecovery", false).commit();
+		} else {
+
+			recoveryMode = true;
+		}
+
+
 		myDatabase = dbHelper.getWritableDatabase();
-		myDatabase.execSQL("DROP TABLE IF EXISTS " + Constants.SIMPLE_DHT);
-		myDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + Constants.SIMPLE_DHT + " (" + Constants.KEY + " VARCHAR PRIMARY KEY NOT NULL, " + Constants.VALUE + " VARCHAR);");
+		myDatabase.execSQL("DROP TABLE IF EXISTS " + Constants.SIMPLE_DYNAMO);
+		myDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + Constants.SIMPLE_DYNAMO + " (" + Constants.KEY + " VARCHAR PRIMARY KEY NOT NULL, " + Constants.VALUE + " VARCHAR);");
 		//create a sequential thingy that keeps listening for connections in a while loop
+
+
+		if(recoveryMode) {
+
+
+
+
+		}
 		ServerSocket serverSocket = null;
 		new ServerTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, serverSocket );
 		return true;
 	}
-	public static Message queryStarMessage = null;
+
+	public static Message queryStarMessage = new Message(Message.MessageType.queryStarResult, "0");
 	public static ConcurrentHashMap<String, String> queryMap = new ConcurrentHashMap<String, String>(25);
 	Object lock = new Object();
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
 						String sortOrder) {
+		preferences.getString("isFirstTime", "0");
 		new Helper().recalculateHashValues();
 
 		Log.i("QUERY", "Querying " + selection);
 
-		if(selection.equalsIgnoreCase("@")) {
+		if (selection.equalsIgnoreCase("@")) {
 			Log.i("QUERY", "Querying everything in this node");
 			//select key, value from table
 			Cursor cursor = new Helper().query(myDatabase);
-			Log.i(TAG, "Query result for @");
+			HashMap<String, String> map = new HashMap<String, String>();
+			while (cursor.moveToNext()) {
+				map.put(cursor.getString(cursor.getColumnIndex(Constants.KEY)), cursor.getString(cursor.getColumnIndex(Constants.VALUE)));
+			}
+			Log.i("QUERY_RESULT", "query result " +map);
 			return cursor;
 		}
-		if(successorPort==null && !selection.equalsIgnoreCase("*")) {
-			Log.i("QUERY", "Successor is null, so querying only this node for selection " + selection) ;
-			Cursor cursor =  new Helper().query(selection, myDatabase);
-			Log.i("QUERY", "query result " + cursor.toString());
 
-			return cursor;
-		}
-		if(successorPort==null && selection.equalsIgnoreCase("*")) {
-			Log.i("QUERY", "Successor is null, so querying only this node for * ") ;
-			Cursor cursor =  new Helper().query(myDatabase);
-			Log.i("QUERY", "query result " + cursor.toString());
-
-			return cursor;
-		}
 		if (selection.equalsIgnoreCase("*")) {
 			synchronized (lock) {
 				Log.i("QUERY", "Querying everything in Dynamo");
 				//select key, value from table
 				Message message = new Message(Message.MessageType.queryStar, myPort);
-				HashMap<String, String> map = new HashMap<String, String>();
-				Cursor cursor = new Helper().query(myDatabase);
-				cursor.moveToPosition(-1);
-				while (cursor.moveToNext()) {
-					map.put(cursor.getString(cursor.getColumnIndex(Constants.KEY)), cursor.getString(cursor.getColumnIndex(Constants.VALUE)));
+
+				for(int i =0; i<5;i++) {
+					asyncSendMessage(message, Constants.REMOTE_PORTS_IN_CONNECTED_ORDER[i]);
 				}
-				Log.i("QUERY", "map object at this point " + map);
-				message.setMessageMap(map);
-				asyncSendMessage(message, successorPort);
-				while (queryStarMessage == null) {
+
+
+//				HashMap<String, String> map = new HashMap<String, String>();
+//				Cursor cursor = new Helper().query(myDatabase);
+//				cursor.moveToPosition(-1);
+//				while (cursor.moveToNext()) {
+//					map.put(cursor.getString(cursor.getColumnIndex(Constants.KEY)), cursor.getString(cursor.getColumnIndex(Constants.VALUE)));
+//				}
+//				Log.i("QUERY", "map object at this point " + map);
+//				message.setMessageMap(map);
+//				asyncSendMessage(message, successorPort);
+				while (queryStarMessage.getQueryStarCount() != 5) {
 					try {
-						Thread.sleep(1000);
+						Log.d("QUERY", "Sleeping for 100ms waiting for query result of " + selection);
+						Thread.sleep(100);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -186,6 +193,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 					returnCursor.addRow(new String[]{key, queryStarReturnMap.get(key)});
 				}
 				Log.i(TAG, "Query result for *" + returnCursor);
+				queryStarMessage = new Message(Message.MessageType.queryStarResult, "0");
 				return returnCursor;
 			}
 		}
@@ -195,20 +203,22 @@ public class SimpleDynamoProvider extends ContentProvider {
 		Log.i("QUERY", "This is a regular query with selection " + selection);
 		//this is a regular query
 
-		if(isItMyNode(selection)) {
-			Log.i("QUERY", "Querying local node");
+		//find which node
+		String port = findNode(selection);
+		if(port.equalsIgnoreCase(myPort)) {
 			return new Helper().query(selection, myDatabase);
 		} else {
-			//forward
 			Log.i("QUERY", "Forwarding query " + selection );
-			Message message = new Message(Message.MessageType.query, myPort);
+			Message message = new Message(Message.MessageType.query,  myPort);
 			message.setData(selection);
 			queryMap.put(selection, "null");
-			Log.i("QUERY", "successor port at this point is " + successorPort );
-			asyncSendMessage(message, successorPort);
+			asyncSendMessage(message, port);
+			asyncSendMessage(message, lookupSuccessor(port));
+			asyncSendMessage(message, lookupSuccessor(lookupSuccessor(port)));
 			while (queryMap.get(selection) .equalsIgnoreCase("null")) {
 				try {
-					Thread.sleep(1000);
+					Log.d("QUERY", "Sleeping for 100ms waiting for query result of " + selection);
+					Thread.sleep(100);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}

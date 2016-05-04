@@ -1,7 +1,6 @@
 package edu.buffalo.cse.cse486586.simpledynamo;
 
 import android.content.ContentValues;
-import android.content.SyncStatusObserver;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.AsyncTask;
@@ -50,11 +49,8 @@ public class Helper {
     public static String genHash(String input) throws NoSuchAlgorithmException {
 
         if(input == null) {
-            Log.e(TAG, "input is null!!!");
         }
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-        Log.i("genhash", "" + sha1);
-        Log.i("genhash", "" + input.getBytes());
         byte[] sha1Hash = sha1.digest(input.getBytes());
         Formatter formatter = new Formatter();
         for (byte b : sha1Hash) {
@@ -76,11 +72,12 @@ public class Helper {
             oos.flush();
             oos.reset();
             sendSocket.close();
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
             Log.e(TAG, Log.getStackTraceString(e));
             return false;
-        } finally {
+        }
+        finally {
             if (sendSocket != null && !sendSocket.isClosed()) {
                 try {
                     sendSocket.close();
@@ -148,31 +145,52 @@ public class Helper {
         return null;
     }
 
+//    public static String findNode(String key) {
+//        Log.i("FIND_NODE", "Input with key=" + key );
+//        String returnerValue = null;
+//        String hashKey;
+//        try {
+//            hashKey = genHash(key);
+//        } catch (NoSuchAlgorithmException e) {
+//            e.printStackTrace();
+//            throw new RuntimeException("genhash error");
+//        }
+//        for(int i = 0; i<4; i++) {
+//            if(hashKey.compareTo(Constants.hashedPortsInAscendingOrder[i])<0 && hashKey.compareTo(Constants.hashedPortsInAscendingOrder[i+1]) > 0)  {
+//                return Constants.REMOTE_PORTS_IN_CONNECTED_ORDER[i];
+//            }
+//        }
+//        return  Constants.REMOTE_PORTS_IN_CONNECTED_ORDER[4];
+//
+//
+//    }
 
 
-    public static boolean isItThisNode(String node, String key) {
-        Log.i("INSIDE_NODE","Checking if the key " + key + " belongs to node " + node);
+    public static boolean isItThisNode(String port, String key) {
+        Log.i("INSIDE_NODE","Checking if the key " + key + " belongs to node " + port);
         String hashedKey = null;
         String hashedThisNode = null;
         String localHashedPredecessor = null;
         String localHashedSuccessor = null;
         try {
             hashedKey = genHash(key);
-            hashedThisNode = genHash(node);
-            localHashedPredecessor = genHash(lookupPredecessor(node));
-            localHashedSuccessor = genHash(lookupSuccessor(node));
+            hashedThisNode = genHash(String.valueOf(Integer.parseInt(port) / 2));
+            localHashedPredecessor = genHash(String.valueOf(Integer.parseInt(lookupPredecessor(port)) / 2));
+//            localHashedSuccessor = genHash(String.valueOf(Integer.parseInt(lookupSuccessor(port)) / 2));
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
             throw new RuntimeException("Some problem with hashing");
         }
         if (hashedThisNode.compareTo(localHashedPredecessor) < 0) {
-            if (hashedThisNode.compareTo(hashedKey) > 0 || hashedKey.compareTo(localHashedPredecessor) > 0) {
+            if (hashedThisNode.compareTo(hashedKey) >= 0 || hashedKey.compareTo(localHashedPredecessor) > 0) {
+                Log.i("FIND_NODE","1 Port for " + key + " is " + port) ;
                 return true;
             } else {
                 return false;
             }
         }
-        if (hashedThisNode.compareTo(hashedKey) > 0 && hashedKey.compareTo(localHashedSuccessor) > 0) {
+        if (hashedThisNode.compareTo(hashedKey) >= 0 && hashedKey.compareTo(localHashedPredecessor) > 0) {
+            Log.i("FIND_NODE","2 Port for " + key + " is " + port) ;
             return true;
         } else {
             return false;
@@ -180,6 +198,8 @@ public class Helper {
     }
 
     //the order is 11116 11120 11124 11112 11108
+//    / {"11112", "11108", "11116", "11120", "11124"}
+
     public  static String lookupSuccessor(String port) {
         String successorPort = null;
         //Calculate predecessor and successor ports
@@ -226,7 +246,7 @@ public class Helper {
         Log.i("INSERT_HELPER", "Inserting... " + values);
         long returner = 0;
         synchronized (lock) {
-            returner = myDatabase.insertWithOnConflict(Constants.SIMPLE_DHT, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            returner = myDatabase.insertWithOnConflict(Constants.SIMPLE_DYNAMO, null, values, SQLiteDatabase.CONFLICT_REPLACE);
         }
         return returner;
     }
@@ -234,7 +254,7 @@ public class Helper {
     public Cursor query(SQLiteDatabase myDatabase) {
         Cursor cursor = null;
         synchronized (lock) {
-            cursor = myDatabase.query(true, Constants.SIMPLE_DHT, new String[]{Constants.KEY, Constants.VALUE}, null, null, null, null, null, null);
+            cursor = myDatabase.query(true, Constants.SIMPLE_DYNAMO, new String[]{Constants.KEY, Constants.VALUE}, null, null, null, null, null, null);
         }
         return cursor;
     }
@@ -242,7 +262,7 @@ public class Helper {
     public Cursor query(String selection, SQLiteDatabase myDatabase) {
         Cursor cursor = null;
         synchronized (lock) {
-            cursor = myDatabase.query(true, Constants.SIMPLE_DHT, new String[]{Constants.KEY, Constants.VALUE}, Constants.KEY + " = ?", new String[]{selection}, null, null, null, null);
+            cursor = myDatabase.query(true, Constants.SIMPLE_DYNAMO, new String[]{Constants.KEY, Constants.VALUE}, Constants.KEY + " = ?", new String[]{selection}, null, null, null, null);
         }
         return cursor;
     }
