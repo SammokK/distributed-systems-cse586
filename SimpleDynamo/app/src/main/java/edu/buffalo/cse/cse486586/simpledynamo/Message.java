@@ -78,7 +78,7 @@ public class Message implements Serializable{
     }
 
     public enum MessageType {
-        godJoin, slaveJoin, chSuccessor, chPredecessor, chSuccAndPred , insert, query, update, queryStar, queryResult, queryStarResult, recoveryQueryStar, delete
+        godJoin, slaveJoin, chSuccessor, chPredecessor, chSuccAndPred , insert, query, update, queryStar, queryResult, queryStarResult, recoveryQueryStar, delete, recoveryQueryStarResult
     };
     private MessageType type;
 

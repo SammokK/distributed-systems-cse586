@@ -94,6 +94,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 		//find which three nodes must insert
 		String key = (String) values.get(Constants.KEY);
 		String value = (String) values.get(Constants.VALUE);
+		Log.i("INSERT_PROVIDER", "key=" +key + " value=" + value);
 		Message message = new Message(Message.MessageType.insert, myPort);
 		HashMap<String, String> map = new HashMap<String, String>();
 		map.put(Constants.KEY, key);
@@ -167,7 +168,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 			Log.i("RECOVERY_MODE", "Entering recovery mode");
 			//do a query star, and insert it locally.
 
-			Log.i("RECOVERY_QUERY_STAR", "In recovery mode, querying everything in Dynamo");
+			Log.i("RECOVERY_MODE", "In recovery mode, querying everything in Dynamo");
 			//select key, value from table
 			Message message = new Message(Message.MessageType.recoveryQueryStar, myPort);
 			for (int i = 0; i < 5; i++) {
@@ -176,18 +177,19 @@ public class SimpleDynamoProvider extends ContentProvider {
 				}
 			}
 			try {
-				Log.d("RECOVERY_QUERY_STAR", "Sleeping for 2000ms waiting for query result of query * ");
+				Log.d("RECOVERY_MODE", "Sleeping for 5000ms waiting for query result of query * ");
 				Thread.sleep(5000);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
+			recoveryCounter = 4;
 			//construct a cursor object from the starMessageMap and return it
 			HashMap<String, String> queryStarReturnMap = queryStarMessage.getMessageMap();
 			MatrixCursor returnCursor = new MatrixCursor(new String[]{Constants.KEY, Constants.VALUE});
 			for (String key : queryStarReturnMap.keySet()) {
 				returnCursor.addRow(new String[]{key, queryStarReturnMap.get(key)});
 			}
-			Log.i(TAG, "Query result for * in recovery mode" + queryStarReturnMap);
+			Log.i("RECOVERY_MODE", "Query result for * in recovery mode" + queryStarReturnMap);
 			//inset into the database
 			for (String key : queryStarReturnMap.keySet()) {
 //				if (isItThisNode(lookupPredecessor(myPort), key) || isItThisNode(lookupPredecessor(lookupPredecessor(myPort)), key) || isItThisNode(myPort, key)) {
@@ -236,12 +238,17 @@ public class SimpleDynamoProvider extends ContentProvider {
 		if (selection.equalsIgnoreCase("@")) {
 			Log.i("QUERY_PROVIDER", "Querying everything in this node");
 			//select key, value from table
+			try {
+				Thread.sleep(2000);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 			Cursor cursor = new Helper().query(myDatabase);
 			HashMap<String, String> map = new HashMap<String, String>();
 			while (cursor.moveToNext()) {
 				map.put(cursor.getString(cursor.getColumnIndex(Constants.KEY)), cursor.getString(cursor.getColumnIndex(Constants.VALUE)));
 			}
-			Log.i("QUERY_RESULT", "query result " +map);
+//			Log.i("QUERY_RESULT", "query result " +map);
 			return cursor;
 		}
 

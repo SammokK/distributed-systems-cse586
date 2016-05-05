@@ -128,12 +128,17 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         }
 
                         Message queryStarReplyMessage = new Message(Message.MessageType.queryStarResult, myPort);
+                        if(message.getType()== Message.MessageType.recoveryQueryStar) {
+                            queryStarReplyMessage.setType(Message.MessageType.recoveryQueryStarResult);
+                        }
                         queryStarReplyMessage.setMessageMap(map);
                         new Helper().sendMessage(queryStarReplyMessage, message.getOriginPort());
                         Log.i("QUERY_RESULT", "query result " +map);
                         break;
+                    case recoveryQueryStarResult :
+                        --SimpleDynamoProvider.recoveryCounter;
                     case queryStarResult:
-                        Log.i("QUERY_STAR_RESULT", "Received query star result object with result map" + message.getMessageMap());
+//                        Log.i("QUERY_STAR_RESULT", "Received query star result object with result map" + message.getMessageMap());
                         SimpleDynamoProvider.queryStarMessage.getMessageMap().putAll(message.getMessageMap());
                         SimpleDynamoProvider.queryStarMessage.setQueryStarCount(SimpleDynamoProvider.queryStarMessage.getQueryStarCount() + 1);
                         break;
@@ -157,10 +162,22 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         }
                         Log.i("QUERY", "Received query request" + message.getData());
                         Cursor queryCursor = null;
+                        int tries = 0;
                         do {
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
                             queryCursor = new Helper().query(message.getData(), myDatabase);
+                            Log.i("QUERY_LOOP", "inside brute force loop for key=" + message.getData() + ", iteration=" + tries);
+                            tries++;
+                            if(tries==30) {
+                                Log.i("QUERY_TIME_OUT", "Timed out for query key=" + message.getData());
+                                break;
+                            }
                         }
-                        while (queryCursor.getColumnIndex(Constants.VALUE) == -1);
+                        while (queryCursor.getColumnIndex(Constants.VALUE) == -1 && tries<30);
 
                         HashMap<String, String> queryMap = new HashMap<String, String>();
                         queryCursor.moveToPosition(-1);
@@ -172,6 +189,7 @@ public class ServerTask extends AsyncTask<ServerSocket, String, Void> {
                         message.setType(Message.MessageType.queryResult);
                         message.setMessageMap(queryMap);
                         new Helper().sendMessage(message, message.getOriginPort());
+                        Log.i("QUERY_TIME_OUT", "Sent the message " + message.getMessageMap() + " back to " + message.getOriginPort());
                         break;
                     default:
                         Log.e(TAG, "unimplemented type." + message);
