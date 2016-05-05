@@ -13,7 +13,6 @@ import java.net.ServerSocket;
 public class CallableSendMessage extends AsyncTask<ServerSocket, String, Void> {
     private Message message;
     private String portNumber;
-
     private static Object lock = new Object();
 
     @Override

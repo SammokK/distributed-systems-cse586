@@ -74,6 +74,7 @@ public class Helper {
             sendSocket.close();
         } catch (Exception e) {
             e.printStackTrace();
+            Log.e(TAG, "Exception occurred while sending to port  " + port + ", message " + message );
             Log.e(TAG, Log.getStackTraceString(e));
             return false;
         }
@@ -128,12 +129,12 @@ public class Helper {
     }
 
     public static String findNode(String key) {
-        Log.i("FIND_NODE", "Input with key=" + key );
+        Log.d("FIND_NODE", "Input with key=" + key );
         String returnerValue = null;
         for (int i = 0; i<Constants.REMOTE_PORTS_IN_CONNECTED_ORDER.length; i++) {
             String port = Constants.REMOTE_PORTS_IN_CONNECTED_ORDER[i];
             if (isItThisNode(port, key)) {
-                Log.i("FIND_NODE", "For key=" + key + " , node is " + port);
+                Log.d("FIND_NODE", "For key=" + key + " , node is " + port);
                 return port;
             }
         }
@@ -167,7 +168,7 @@ public class Helper {
 
 
     public static boolean isItThisNode(String port, String key) {
-        Log.i("INSIDE_NODE","Checking if the key " + key + " belongs to node " + port);
+        Log.d("INSIDE_NODE","Checking if the key " + key + " belongs to node " + port);
         String hashedKey = null;
         String hashedThisNode = null;
         String localHashedPredecessor = null;
@@ -183,14 +184,14 @@ public class Helper {
         }
         if (hashedThisNode.compareTo(localHashedPredecessor) < 0) {
             if (hashedThisNode.compareTo(hashedKey) >= 0 || hashedKey.compareTo(localHashedPredecessor) > 0) {
-                Log.i("FIND_NODE","1 Port for " + key + " is " + port) ;
+                Log.d("FIND_NODE","1 Port for " + key + " is " + port) ;
                 return true;
             } else {
                 return false;
             }
         }
         if (hashedThisNode.compareTo(hashedKey) >= 0 && hashedKey.compareTo(localHashedPredecessor) > 0) {
-            Log.i("FIND_NODE","2 Port for " + key + " is " + port) ;
+            Log.d("FIND_NODE","2 Port for " + key + " is " + port) ;
             return true;
         } else {
             return false;
@@ -216,7 +217,7 @@ public class Helper {
         }else {
             throw new RuntimeException("Port " + port + " not found!!");
         }
-        Log.i("LOOKUP_SUCCESSOR", "Successor of port " + port  + " is  " + successorPort);
+        Log.d("LOOKUP_SUCCESSOR", "Successor of port " + port  + " is  " + successorPort);
         return successorPort;
     }
 

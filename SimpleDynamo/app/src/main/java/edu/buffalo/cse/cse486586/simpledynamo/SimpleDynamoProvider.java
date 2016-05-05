@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static edu.buffalo.cse.cse486586.simpledynamo.Helper.asyncSendMessage;
 import static edu.buffalo.cse.cse486586.simpledynamo.Helper.findNode;
-import static edu.buffalo.cse.cse486586.simpledynamo.Helper.isItMyNode;
+import static edu.buffalo.cse.cse486586.simpledynamo.Helper.lookupPredecessor;
 import static edu.buffalo.cse.cse486586.simpledynamo.Helper.lookupSuccessor;
 
 //import static edu.buffalo.cse.cse486586.simpledht.Helper.sendMessage;
@@ -29,16 +29,50 @@ public class SimpleDynamoProvider extends ContentProvider {
 
 	static String successorPort;
 	static String predecessorPort;
-	static String myPort = null;
+	static String myPort= null;
+	static  int recoveryCounter = 4;
 
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
+		while(recoveryMode) {
+			try {
+				Log.i("DELETE_PROVIDER", "Sleeping on recovery mode");
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
 		new Helper().recalculateHashValues();
 		//todo check to see if the message is in this node or elsewhere, if it is this node continue to below line
-		myDatabase.delete(Constants.SIMPLE_DYNAMO, Constants.KEY + "=?", new String[]{selection});
+
+
+		//find which three nodes must insert
+		Message message = new Message(Message.MessageType.delete, myPort);
+		HashMap<String, String> map = new HashMap<String, String>();
+		message.setMessageMap(map);
+		String primaryPort = findNode(selection);
+		//send the messages
+		deleteFromNode(selection, primaryPort);
+		deleteFromNode(selection, lookupSuccessor(primaryPort));
+		deleteFromNode(selection, lookupSuccessor(lookupSuccessor(primaryPort)));
 		return 0;
 	}
 
+	private void deleteFromNode(String key, String port) {
+		Log.i("DELETE_FROM_NODE", "Delete " + key + " to node " + port + " . My port is " + myPort);
+		if (!port.equalsIgnoreCase(myPort)) {
+			Message message = new Message(Message.MessageType.delete, myPort);
+			message.setData(key);
+			try {
+				asyncSendMessage(message, port);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		} else {
+			Log.i("DELETE_FROM_NODE_LOCAL", "Deleting " + key + " from local db");
+			myDatabase.delete(Constants.SIMPLE_DYNAMO, Constants.KEY + "=?", new String[]{key});
+		}
+	}
 	@Override
 	public String getType(Uri uri) {
 		return null;
@@ -46,6 +80,14 @@ public class SimpleDynamoProvider extends ContentProvider {
 
 	@Override
 	public Uri insert(Uri uri, ContentValues values) {
+		while(recoveryMode) {
+			try {
+				Log.i("INSERT_PROVIDER", "Sleeping on recovery mode");
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
 		// todo this is only local insertion. Add stuff for global insertion.
 		Log.i(TAG, "start of INSERT " + values.toString());
 
@@ -93,8 +135,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 		myPort = String.valueOf((Integer.parseInt(portStr) * 2));
 	}
 
-	boolean recoveryMode = false;
-	SharedPreferences preferences = null;
+	public  static boolean recoveryMode = false;
 	@Override
 	public boolean onCreate() {
 		Log.v(TAG, "Inside oncreate()");
@@ -115,22 +156,62 @@ public class SimpleDynamoProvider extends ContentProvider {
 
 			recoveryMode = true;
 		}
-
-
 		myDatabase = dbHelper.getWritableDatabase();
 		myDatabase.execSQL("DROP TABLE IF EXISTS " + Constants.SIMPLE_DYNAMO);
 		myDatabase.execSQL("CREATE TABLE IF NOT EXISTS " + Constants.SIMPLE_DYNAMO + " (" + Constants.KEY + " VARCHAR PRIMARY KEY NOT NULL, " + Constants.VALUE + " VARCHAR);");
 		//create a sequential thingy that keeps listening for connections in a while loop
-
-
-		if(recoveryMode) {
-
-
-
-
-		}
 		ServerSocket serverSocket = null;
 		new ServerTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, serverSocket );
+		queryStarMessage = new Message(Message.MessageType.queryStarResult, "0");
+		if(recoveryMode) {
+			Log.i("RECOVERY_MODE", "Entering recovery mode");
+			//do a query star, and insert it locally.
+
+			Log.i("RECOVERY_QUERY_STAR", "In recovery mode, querying everything in Dynamo");
+			//select key, value from table
+			Message message = new Message(Message.MessageType.recoveryQueryStar, myPort);
+			for (int i = 0; i < 5; i++) {
+				if (!Constants.REMOTE_PORTS_IN_CONNECTED_ORDER[i].equalsIgnoreCase(myPort)) {
+					asyncSendMessage(message, Constants.REMOTE_PORTS_IN_CONNECTED_ORDER[i]);
+				}
+			}
+			try {
+				Log.d("RECOVERY_QUERY_STAR", "Sleeping for 2000ms waiting for query result of query * ");
+				Thread.sleep(5000);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			//construct a cursor object from the starMessageMap and return it
+			HashMap<String, String> queryStarReturnMap = queryStarMessage.getMessageMap();
+			MatrixCursor returnCursor = new MatrixCursor(new String[]{Constants.KEY, Constants.VALUE});
+			for (String key : queryStarReturnMap.keySet()) {
+				returnCursor.addRow(new String[]{key, queryStarReturnMap.get(key)});
+			}
+			Log.i(TAG, "Query result for * in recovery mode" + queryStarReturnMap);
+			//inset into the database
+			for (String key : queryStarReturnMap.keySet()) {
+//				if (isItThisNode(lookupPredecessor(myPort), key) || isItThisNode(lookupPredecessor(lookupPredecessor(myPort)), key) || isItThisNode(myPort, key)) {
+				String portString = findNode(key);
+
+				if (portString.equalsIgnoreCase(myPort) || portString.equalsIgnoreCase(lookupPredecessor(myPort))
+						|| portString.equalsIgnoreCase(lookupPredecessor(lookupPredecessor(myPort)))) {
+//					HashMap<String, String> insertMap = message.getMessageMap();
+					//directly insert into this node.
+					Log.i("RECOVERY_MODE", "Inserting " + key + "=" + queryStarReturnMap.get(key)  + " because it belongs to " + portString);
+					ContentValues values = new ContentValues();
+					values.put(Constants.KEY, key);
+					values.put(Constants.VALUE, queryStarReturnMap.get(key));
+					new Helper().insert(values, myDatabase);
+				} else {
+					Log.i("RECOVERY_MODE", "Discarding " + key + "=" + queryStarReturnMap.get(key) + " because it belongs to " + portString);
+				}
+			}
+
+			recoveryMode = false;
+			Log.i("RECOVERY_MODE", "Exiting recovery mode");
+		}
+
+
 		return true;
 	}
 
@@ -140,13 +221,20 @@ public class SimpleDynamoProvider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
 						String sortOrder) {
-		preferences.getString("isFirstTime", "0");
+		while(recoveryMode) {
+			try {
+				Log.i("QUERY_PROVIDER", "Sleeping on recovery mode");
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
 		new Helper().recalculateHashValues();
 
-		Log.i("QUERY", "Querying " + selection);
+		Log.i("QUERY_PROVIDER", "Querying " + selection);
 
 		if (selection.equalsIgnoreCase("@")) {
-			Log.i("QUERY", "Querying everything in this node");
+			Log.i("QUERY_PROVIDER", "Querying everything in this node");
 			//select key, value from table
 			Cursor cursor = new Helper().query(myDatabase);
 			HashMap<String, String> map = new HashMap<String, String>();
@@ -159,40 +247,26 @@ public class SimpleDynamoProvider extends ContentProvider {
 
 		if (selection.equalsIgnoreCase("*")) {
 			synchronized (lock) {
-				Log.i("QUERY", "Querying everything in Dynamo");
+				Log.i("QUERY_PROVIDER", "Querying everything in Dynamo");
 				//select key, value from table
 				Message message = new Message(Message.MessageType.queryStar, myPort);
 
 				for(int i =0; i<5;i++) {
 					asyncSendMessage(message, Constants.REMOTE_PORTS_IN_CONNECTED_ORDER[i]);
 				}
-
-
-//				HashMap<String, String> map = new HashMap<String, String>();
-//				Cursor cursor = new Helper().query(myDatabase);
-//				cursor.moveToPosition(-1);
-//				while (cursor.moveToNext()) {
-//					map.put(cursor.getString(cursor.getColumnIndex(Constants.KEY)), cursor.getString(cursor.getColumnIndex(Constants.VALUE)));
-//				}
-//				Log.i("QUERY", "map object at this point " + map);
-//				message.setMessageMap(map);
-//				asyncSendMessage(message, successorPort);
-				while (queryStarMessage.getQueryStarCount() != 5) {
-					try {
-						Log.d("QUERY", "Sleeping for 100ms waiting for query result of " + selection);
-						Thread.sleep(100);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
+				try {
+					Log.d("QUERY_PROVIDER", "Sleeping for 2000ms waiting for query result of " + selection);
+					Thread.sleep(2000);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
 				}
 				//construct a cursor object from the starMessageMap and return it
-
 				HashMap<String, String> queryStarReturnMap = queryStarMessage.getMessageMap();
 				MatrixCursor returnCursor = new MatrixCursor(new String[]{Constants.KEY, Constants.VALUE});
 				for (String key : queryStarReturnMap.keySet()) {
 					returnCursor.addRow(new String[]{key, queryStarReturnMap.get(key)});
 				}
-				Log.i(TAG, "Query result for *" + returnCursor);
+				Log.i("QUERY_PROVIDER", "Query result for *" + returnCursor);
 				queryStarMessage = new Message(Message.MessageType.queryStarResult, "0");
 				return returnCursor;
 			}
@@ -205,30 +279,26 @@ public class SimpleDynamoProvider extends ContentProvider {
 
 		//find which node
 		String port = findNode(selection);
-		if(port.equalsIgnoreCase(myPort)) {
-			return new Helper().query(selection, myDatabase);
-		} else {
-			Log.i("QUERY", "Forwarding query " + selection );
-			Message message = new Message(Message.MessageType.query,  myPort);
-			message.setData(selection);
-			queryMap.put(selection, "null");
-			asyncSendMessage(message, port);
-			asyncSendMessage(message, lookupSuccessor(port));
-			asyncSendMessage(message, lookupSuccessor(lookupSuccessor(port)));
-			while (queryMap.get(selection) .equalsIgnoreCase("null")) {
-				try {
-					Log.d("QUERY", "Sleeping for 100ms waiting for query result of " + selection);
-					Thread.sleep(100);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+		Log.i("QUERY_PROVIDER", "Forwarding query " + selection);
+		Message message = new Message(Message.MessageType.query, myPort);
+		message.setData(selection);
+		queryMap.put(selection, "null");
+		asyncSendMessage(message, port);
+		asyncSendMessage(message, lookupSuccessor(port));
+		asyncSendMessage(message, lookupSuccessor(lookupSuccessor(port)));
+		while (queryMap.get(selection).equalsIgnoreCase("null")) {
+			try {
+				Log.d("QUERY", "Sleeping for 100ms waiting for query result of " + selection);
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
 			}
-			String result = queryMap.get(selection);
-			MatrixCursor returnCursor = new MatrixCursor(new String[]{Constants.KEY, Constants.VALUE});
-			returnCursor.addRow(new String[]{selection, result});
-			Log.i("QUERY", "Query results count " + returnCursor);
-			return returnCursor;
 		}
+		String result = queryMap.get(selection);
+		MatrixCursor returnCursor = new MatrixCursor(new String[]{Constants.KEY, Constants.VALUE});
+		returnCursor.addRow(new String[]{selection, result});
+		Log.i("QUERY", "Query results count " + returnCursor);
+		return returnCursor;
 	}
 
 
